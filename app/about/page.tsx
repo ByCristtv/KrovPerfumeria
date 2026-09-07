@@ -5,8 +5,7 @@ import Diferenciadores from "@/components/about/Diferenciadores";
 import ArteDecant from "@/components/about/ArteDecant";
 import CasasPerfumistas from "@/components/about/CasasPerfumistas";
 import Identidad from "@/components/about/Identidad";
-import ExperienciaStats from "@/components/about/ExperienciaStats";
-import Comunidad from "@/components/about/Comunidad";
+
 import CTAFinal from "@/components/about/CTAFinal";
 import Reveal from "@/components/ui/Reveal";
 

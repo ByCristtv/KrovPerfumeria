@@ -6,6 +6,7 @@ import { useCartPricing } from "@/hooks/useCartPricing";
 import { useIsMounted } from "@/hooks/useIsMounted";
 import { useShippingPreview } from "@/hooks/useShippingPreview";
 import { formatPrice } from "@/lib/format";
+import { resolveShippingCost } from "@/lib/shipping/localDelivery";
 
 interface OrderSummaryProps {
   /**
@@ -13,9 +14,17 @@ interface OrderSummaryProps {
    * the shipping line shows a "pick a canton" hint instead of a calculated cost.
    */
   cantonCode: string | undefined;
+  /** Selected district name — half of the free-local-delivery condition. */
+  district?: string;
+  /** The customer's "Cariari centro" opt-in, if they ticked it. */
+  localDelivery?: boolean;
 }
 
-export default function OrderSummary({ cantonCode }: OrderSummaryProps) {
+export default function OrderSummary({
+  cantonCode,
+  district,
+  localDelivery,
+}: OrderSummaryProps) {
   // Zustand cart persists in localStorage. SSR renders empty, client hydrates
   // with the real cart → guard against the hydration mismatch.
   const mounted = useIsMounted();
@@ -53,9 +62,24 @@ export default function OrderSummary({ cantonCode }: OrderSummaryProps) {
     );
   }
 
-  const shippingCost = shipping?.cost ?? 0;
+  /*
+   * The same override the server will apply, run against the same RPC result.
+   *
+   * Calling the shared rule — rather than special-casing the display — is what
+   * keeps the preview honest: this line and the amount the order is actually
+   * created with come from one function, so they cannot disagree.
+   */
+  const resolved = resolveShippingCost(
+    shipping?.cost ?? 0,
+    { canton_code: cantonCode ?? "", district },
+    localDelivery
+  );
+  const shippingCost = resolved.cost;
   const total = goodsSubtotal + shippingCost;
+
+  // A threshold the customer no longer needs to reach is not worth nagging about.
   const thresholdRemaining =
+    !resolved.localDeliveryApplied &&
     shipping?.free_shipping_threshold != null &&
     !shipping.free_shipping_applied
       ? shipping.free_shipping_threshold - goodsSubtotal
@@ -117,6 +141,7 @@ export default function OrderSummary({ cantonCode }: OrderSummaryProps) {
             {renderShippingValue({
               cantonCode,
               shipping,
+              localDeliveryApplied: resolved.localDeliveryApplied,
               loading: shippingLoading,
               error: shippingError,
             })}
@@ -150,6 +175,8 @@ export default function OrderSummary({ cantonCode }: OrderSummaryProps) {
 interface RenderShippingArgs {
   cantonCode: string | undefined;
   shipping: { cost: number; zone_name: string; free_shipping_applied: boolean } | undefined;
+  /** True when the "Cariari centro" opt-in zeroed the cost. */
+  localDeliveryApplied: boolean;
   loading: boolean;
   error: boolean;
 }
@@ -157,6 +184,7 @@ interface RenderShippingArgs {
 function renderShippingValue({
   cantonCode,
   shipping,
+  localDeliveryApplied,
   loading,
   error,
 }: RenderShippingArgs) {
@@ -174,6 +202,19 @@ function renderShippingValue({
     );
   }
   if (!shipping) return null;
+
+  // Checked before the zone's own threshold: both render "Gratis", but this one
+  // names the reason, which is the thing the customer just opted into.
+  if (localDeliveryApplied) {
+    return (
+      <span className="inline-flex flex-col items-end gap-1">
+        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-200 text-[11px] font-semibold uppercase tracking-wide">
+          Gratis
+        </span>
+        <span className="text-[10px] text-krov-dust">Cariari centro</span>
+      </span>
+    );
+  }
 
   if (shipping.free_shipping_applied) {
     return (

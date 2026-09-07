@@ -72,6 +72,8 @@ export default function CheckoutClient() {
   });
 
   const watchedCantonCode = form.watch("shipping.canton_code");
+  const watchedDistrict = form.watch("shipping.district");
+  const watchedLocalDelivery = form.watch("shipping.local_delivery");
 
   // Prefill form with logged-in user's saved data.
   useEffect(() => {
@@ -92,6 +94,9 @@ export default function CheckoutClient() {
           district: address?.district ?? "",
           address: address?.exact_address ?? "",
           reference: address?.references ?? "",
+          // Never prefilled from a saved address: the opt-in is a statement
+          // about this order, and the customer has to make it each time.
+          local_delivery: false,
         },
         notes: "",
         payment_method: checkoutFormDefaults.payment_method,
@@ -265,7 +270,13 @@ export default function CheckoutClient() {
           isSubmitting={form.formState.isSubmitting || submit.isPending}
         />
       )}
-      <OrderSummary cantonCode={watchedCantonCode || undefined} />
+      {/* The summary needs the whole address, not just the cantón: free local
+          delivery depends on the district and the opt-in as well. */}
+      <OrderSummary
+        cantonCode={watchedCantonCode || undefined}
+        district={watchedDistrict}
+        localDelivery={watchedLocalDelivery}
+      />
     </div>
   );
 }
@@ -323,6 +334,9 @@ function PaymentPhase({
           <RecapRow label="Señas" value={values.shipping.address} />
           {values.shipping.reference && (
             <RecapRow label="Referencia" value={values.shipping.reference} />
+          )}
+          {values.shipping.local_delivery && (
+            <RecapRow label="Envío" value="Cariari centro — entrega gratis" />
           )}
           {values.notes && <RecapRow label="Notas" value={values.notes} />}
         </dl>

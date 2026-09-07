@@ -4,6 +4,10 @@ import type {
   AdminVariantRow,
   ProductTypes,
 } from "@/types/product";
+import {
+  resolveVariantThumbnail,
+  type VariantImageCandidate,
+} from "@/lib/admin/variantThumbnail";
 
 const ADMIN_VARIANT_SELECT = `
   id,
@@ -25,7 +29,8 @@ const ADMIN_VARIANT_SELECT = `
     brands ( name ),
     product_categories (
       categories ( id, name )
-    )
+    ),
+    product_images ( url, position, variant_id )
   )
 ` as const;
 
@@ -49,6 +54,7 @@ interface AdminVariantQueryRow {
     description: string | null;
     brands: { name: string } | null;
     product_categories: { categories: AdminProductCategory | null }[] | null;
+    product_images: VariantImageCandidate[] | null;
   } | null;
 }
 
@@ -72,6 +78,10 @@ export const getProductsAdmin = async (): Promise<AdminVariantRow[]> => {
 
   const rows = (data ?? []) as unknown as AdminVariantQueryRow[];
 
+  // Ordering stays `created_at DESC`. This helper feeds the variant PICKERS
+  // (manual orders, bulk stock, decant transform, new variant), not the products
+  // table — the active-first rule belongs to that table and is applied by
+  // `getProductsAdminPage` / the RPC.
   return rows.map((v): AdminVariantRow => {
     const parent = v.products;
     const flatCategories: AdminProductCategory[] = (
@@ -97,6 +107,8 @@ export const getProductsAdmin = async (): Promise<AdminVariantRow[]> => {
       description: parent?.description ?? null,
       brand: parent?.brands?.name ?? "Sin marca",
       categories: flatCategories,
+      // Same rule the RPC applies (see lib/admin/variantThumbnail).
+      image_url: resolveVariantThumbnail(v.id, parent?.product_images),
     };
   });
 };

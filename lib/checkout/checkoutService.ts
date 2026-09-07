@@ -2,12 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { signOrderToken, verifyOrderToken } from "@/lib/orders/tokens";
 import type { Database } from "@/types/database";
 import { alreadyPaidError, sessionNotFoundError } from "./errors";
+import { resolveShippingCost } from "@/lib/shipping/localDelivery";
 import {
   calculateShipping,
   cancelOrder,
   itemsMatch,
   loadOrder,
   placeOrder,
+  setShippingTotals,
   stampPayment,
   updateOrder,
   type PendingOrder,
@@ -146,10 +148,46 @@ async function createCheckout(
     notes: input.notes,
   });
 
+  /*
+   * Free local delivery, applied to the rate place_order just computed.
+   *
+   * It has to happen HERE, before the payment is prepared, because the payment
+   * is created for a specific total — charging the zone rate and refunding it
+   * afterwards is not a thing we can do. Eligibility is re-derived from the
+   * address, so the customer's checkbox cannot lower the price on its own.
+   *
+   * The write is ordered before createPayment for the same reason the rest of
+   * this function is ordered the way it is: if it throws, the catch below has
+   * not yet minted a payment to clean up, and the order is cancelled with its
+   * stock restored.
+   */
+  const shipping = resolveShippingCost(
+    placed.shipping_cost,
+    input.shipping,
+    input.shipping.local_delivery
+  );
+  /*
+   * Derived from place_order's own total by SUBTRACTING the reduction, rather
+   * than recomputed as subtotal + shipping. They are identical today — the RPC
+   * sets total = subtotal + shipping_cost — but if it ever grows another term
+   * (the admin order path already has a discount column), recomputing here
+   * would silently drop it. A delta cannot.
+   */
+  const total = placed.total - (placed.shipping_cost - shipping.cost);
+
+  if (shipping.localDeliveryApplied && shipping.cost !== placed.shipping_cost) {
+    try {
+      await setShippingTotals(deps.admin, placed.order_id, shipping.cost, total);
+    } catch (err) {
+      await cancelOrder(deps.admin, placed.order_id, "Shipping override failed");
+      throw err;
+    }
+  }
+
   const ctx: PaymentContext = {
     order_id: placed.order_id,
     order_number: placed.order_number,
-    total: placed.total,
+    total,
     customer: input.customer,
   };
 
@@ -173,7 +211,7 @@ async function createCheckout(
     await processor.releasePayment({
       provider: processor.provider,
       reference: referenceOf(preparation),
-      total: placed.total,
+      total,
     });
     await cancelOrder(deps.admin, placed.order_id, "Payment stamp failed");
     throw err;
@@ -183,8 +221,8 @@ async function createCheckout(
     order_id: placed.order_id,
     order_number: placed.order_number,
     subtotal: placed.subtotal,
-    shipping_cost: placed.shipping_cost,
-    total: placed.total,
+    shipping_cost: shipping.cost,
+    total,
     item_count: placed.item_count,
     order_token: signOrderToken(placed.order_id),
     payment_method: input.payment_method,
@@ -219,11 +257,21 @@ async function updateCheckout(
 ): Promise<CheckoutResult> {
   const processor = getPaymentProcessor(input.payment_method);
 
-  const shippingCost = await calculateShipping(
+  // Same two steps as the create path: the zone rate, then the local-delivery
+  // override on top of it. An edit that moves the address out of Cariari — or
+  // unticks the box — recomputes at the standard rate, because eligibility is
+  // re-derived from the address every time rather than remembered on the order.
+  const zoneCost = await calculateShipping(
     deps.supabase,
     input.shipping.canton_code,
     order.subtotal
   );
+  const shipping = resolveShippingCost(
+    zoneCost,
+    input.shipping,
+    input.shipping.local_delivery
+  );
+  const shippingCost = shipping.cost;
   const total = order.subtotal + shippingCost;
 
   const ctx: PaymentContext = {

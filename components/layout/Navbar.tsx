@@ -8,27 +8,12 @@ import { useAuthUser } from "@/hooks/useAuthUser";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useIsMounted } from "@/hooks/useIsMounted";
 import KrovLogo from "@/components/brand/KrovLogo";
-
-const NAV_LINKS = [
-  { label: "Inicio", href: "/" },
-  { label: "Perfumes", href: "/products" },
-  { label: "Ranking", href: "/ranking" },
-  { label: "Identidad", href: "/about" },
-  { label: "Cómo comprar", href: "/howtobuy" },
-  { label: "Contacto", href: "/contact" },
-] as const;
-
-/**
- * Whether a nav entry represents the page currently being viewed.
- *
- * "/" has to match exactly or it would light up on every route; everything else
- * also matches its subtree, so /products/<slug> still marks "Colección" as
- * current. One function, used by both the desktop bar and the mobile drawer, so
- * the two can never disagree about where the user is.
- */
-function isCurrentRoute(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
-}
+import {
+  HOME_HREF,
+  NAV_LINKS,
+  isCurrentRoute,
+  isHomeRoute,
+} from "./navLinks";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -112,9 +97,16 @@ export default function Navbar() {
               }`}
             >
               {/* Wordmark — the official asset, never type. */}
+              {/*
+                The wordmark is now the ONLY route to the home page — the
+                "Inicio" text entry was removed from NAV_LINKS. That makes its
+                accessible name and its current-page state load-bearing rather
+                than decorative, so both are declared explicitly here.
+              */}
               <Link
-                href="/"
+                href={HOME_HREF}
                 aria-label="KROV Perfumería — inicio"
+                aria-current={isHomeRoute(pathname) ? "page" : undefined}
                 className="shrink-0 opacity-95 transition-opacity duration-300 hover:opacity-100"
               >
                 <KrovLogo
@@ -196,8 +188,10 @@ export default function Navbar() {
         {/*
           max-h-160 (40rem), not the previous 128. The collapse animates a
           max-height, so the cap has to clear the drawer's real height or the
-          last row is simply cut off — six links plus the admin row plus two
-          auth buttons already exceeded 32rem.
+          last row is simply cut off — the links plus the admin row plus two
+          auth buttons already exceeded 32rem. Kept at 40rem after "Inicio" was
+          dropped: the cap only has to CLEAR the content, and leaving headroom
+          means a future entry can be added without the last row vanishing.
         */}
         <div
           className={`lg:hidden overflow-hidden bg-krov-void transition-[max-height,opacity] duration-500 ease-in-out ${

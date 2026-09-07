@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ADMIN_PAGE_SIZE, paginate, type Paginated } from "@/lib/pagination";
+import { sortVariantsByStatus } from "@/lib/admin/variantSort";
 import type {
   AdminProductCategory,
   AdminVariantRow,
@@ -24,6 +25,8 @@ interface RawVariantRow {
   description: string | null;
   brand: string | null;
   categories: AdminProductCategory[] | null;
+  /** Added by 20260905000200; `undefined` until that migration is applied. */
+  image_url?: string | null;
   total_count: number;
 }
 
@@ -32,8 +35,12 @@ interface RawVariantRow {
  *
  * Runs on the SERVER with the request-bound Supabase client, so the
  * `admin_list_product_variants` RPC sees the admin's JWT and its internal
- * `is_admin()` gate passes. Search + pagination + the exact total all happen
- * inside the single RPC call (no N+1). Mirrors `getStockMovements`.
+ * `is_admin()` gate passes. Search + ordering + pagination + the exact total
+ * all happen inside the single RPC call (no N+1). Mirrors `getStockMovements`.
+ *
+ * Rows arrive active-first (see the RPC's ORDER BY). `sortVariantsByStatus`
+ * re-asserts that on the page actually rendered, so the table stays correct
+ * while migration 20260905000200 is pending; it is a stable no-op once live.
  *
  * Never throws: any failure degrades to an empty first page so the panel renders.
  */
@@ -85,7 +92,14 @@ export async function getProductsAdminPage(
     description: v.description ?? null,
     brand: v.brand ?? "Sin marca",
     categories: v.categories ?? [],
+    image_url: v.image_url ?? null,
   }));
 
-  return { rows, total, currentPage, totalPages, pageSize };
+  return {
+    rows: sortVariantsByStatus(rows),
+    total,
+    currentPage,
+    totalPages,
+    pageSize,
+  };
 }

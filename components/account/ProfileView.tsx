@@ -10,6 +10,7 @@ import { useAuthUser } from "@/hooks/useAuthUser";
 import Modal from "@/components/ui/Modal";
 import RankProgress from "@/components/account/RankProgress";
 import RankingSettingsCard from "@/components/account/RankingSettingsCard";
+import DistrictSelect from "@/components/ui/DistrictSelect";
 import {
   Badge,
   Card,
@@ -20,7 +21,12 @@ import {
   SELECT_CLS,
 } from "@/components/account/profileUi";
 import { formatPrice } from "@/lib/format";
-import { findCanton, getCantones, getProvinces } from "@/lib/cr-geo";
+import {
+  findCanton,
+  findDistrictByName,
+  getCantones,
+  getProvinces,
+} from "@/lib/cr-geo";
 import {
   getAccountData,
   getAccountOrders,
@@ -362,6 +368,12 @@ function AddressCard({
     const canton = findCanton(cantonCode);
     if (!canton) return setError("Selecciona un cantón válido");
     if (!district.trim()) return setError("El distrito es requerido");
+    // Re-checked here, not just in the dropdown: a legacy free-text district
+    // survives prefill as an option so the customer can see what was saved, and
+    // this is what stops it from being saved again unchanged.
+    const districtRecord = findDistrictByName(canton.code, district);
+    if (!districtRecord)
+      return setError(`Selecciona un distrito válido de ${canton.name}`);
     if (exactAddress.trim().length < 10)
       return setError("Escribe las señas exactas (al menos 10 caracteres)");
 
@@ -373,7 +385,9 @@ function AddressCard({
         {
           province: canton.provinceCode,
           canton: canton.code,
-          district: district.trim(),
+          // The dataset's canonical spelling, not the raw option text, so
+          // accents and casing are consistent for every address we store.
+          district: districtRecord.name,
           exact_address: exactAddress.trim(),
           references: reference.trim() || null,
         },
@@ -425,7 +439,9 @@ function AddressCard({
                 value={selectedProvince}
                 onChange={(e) => {
                   setProvinceOverride(e.target.value);
+                  // Both levels below the province are now stale.
                   setCantonCode("");
+                  setDistrict("");
                 }}
                 className={SELECT_CLS}
               >
@@ -441,7 +457,11 @@ function AddressCard({
             <Field label="Cantón">
               <select
                 value={cantonCode}
-                onChange={(e) => setCantonCode(e.target.value)}
+                onChange={(e) => {
+                  setCantonCode(e.target.value);
+                  // The old district belonged to the old cantón.
+                  setDistrict("");
+                }}
                 disabled={!selectedProvince}
                 className={SELECT_CLS}
               >
@@ -457,13 +477,14 @@ function AddressCard({
             </Field>
           </div>
 
+          {/* Same cascading dropdown the checkout form uses — one component,
+              so the two can't disagree about which districts a cantón has. */}
           <Field label="Distrito">
-            <input
-              type="text"
+            <DistrictSelect
+              cantonCode={cantonCode}
               value={district}
-              onChange={(e) => setDistrict(e.target.value)}
-              placeholder="Ej. Carmen"
-              className={INPUT_CLS}
+              onChange={setDistrict}
+              className={SELECT_CLS}
             />
           </Field>
 

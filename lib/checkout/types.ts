@@ -50,6 +50,11 @@ export interface CheckoutShipping {
   province_name: string;
   district?: string;
   reference?: string;
+  /**
+   * The customer's "Cariari centro" opt-in. Carried as a request only —
+   * lib/shipping/localDelivery.ts decides whether it actually applies.
+   */
+  local_delivery?: boolean;
 }
 
 /**

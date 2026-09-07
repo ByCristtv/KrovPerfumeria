@@ -207,6 +207,32 @@ export async function updateOrder(
   }
 }
 
+/**
+ * Rewrite an order's shipping cost and total, and nothing else.
+ *
+ * Exists for the free-local-delivery override, which can only be applied AFTER
+ * place_order has run: the RPC computes the zone rate itself, and its result is
+ * what the override reduces. Deliberately narrower than `updateOrder` — this
+ * runs on the create path, where the customer and address were just written by
+ * the RPC and must not be re-sent from the request.
+ */
+export async function setShippingTotals(
+  admin: AdminClient,
+  orderId: string,
+  shippingCost: number,
+  total: number
+): Promise<void> {
+  const { error } = await admin
+    .from("orders")
+    .update({ shipping_cost: shippingCost, total })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("[checkout] shipping override failed", { orderId, error });
+    throw internalError("shipping override failed");
+  }
+}
+
 /** Stamp provider info on a freshly placed order. */
 export async function stampPayment(
   admin: AdminClient,

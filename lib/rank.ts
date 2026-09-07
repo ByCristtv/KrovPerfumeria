@@ -25,9 +25,9 @@ export interface RankDefinition {
  *
  *   Fraiche  0      – 999
  *   Cologne  1,000  – 4,999
- *   EDT      5,000  – 9,999
- *   EDP      10,000 – 17,999
- *   Parfum   18,000 +
+ *   EDT      5,000  – 9,999 
+ *   EDP      10,000 – 17,999 
+ *   Parfum   18,000 + 
  */
 export const RANK_THRESHOLDS: readonly RankDefinition[] = [
   { rank: "Fraiche", minXP: 0 },

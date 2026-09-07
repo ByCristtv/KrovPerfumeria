@@ -1,4 +1,5 @@
 import { RankingBoardSkeleton } from "@/components/ranking/RankingBoard";
+import { RewardsRoadmapSkeleton } from "@/components/ranking/RewardsRoadmap";
 import { RANKING_TOP_COUNT } from "@/types/ranking";
 
 /**
@@ -20,7 +21,7 @@ export default function RankingLoading() {
 
       <div className="relative mx-auto max-w-3xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
         <header className="text-center">
-          <p className="krov-eyebrow mb-5">Ranking</p>
+          <p className="krov-eyebrow mb-5">Ranking y Premios</p>
           <h1 className="krov-display text-4xl text-krov-bone md:text-6xl">
             Top {RANKING_TOP_COUNT}
           </h1>
@@ -32,6 +33,12 @@ export default function RankingLoading() {
 
         <div className="mt-12 sm:mt-16">
           <RankingBoardSkeleton />
+        </div>
+
+        {/* The rewards rail occupies real height below the board; leaving it out
+            here would let the page grow under the reader once it resolves. */}
+        <div className="mt-16 border-t border-krov-smoke/70 pt-14 sm:mt-20 sm:pt-16">
+          <RewardsRoadmapSkeleton />
         </div>
       </div>
     </div>

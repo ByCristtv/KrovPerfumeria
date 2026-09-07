@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Swal from "sweetalert2";
 import { supabase } from "@/lib/supabase/client";
 import type { AdminVariantRow } from "@/types/product";
@@ -9,6 +10,52 @@ const currency = new Intl.NumberFormat("es-CR", {
   currency: "CRC",
   maximumFractionDigits: 0,
 });
+
+/**
+ * Thumbnail box, in px. Roughly half the public catalog thumbnail (the cart
+ * line renders the same photo at 96px) and it keeps the card's 4:5 crop, so a
+ * bottle reads the same shape here as in the storefront. This is a visual
+ * reference for the admin scanning rows — deliberately too small to inspect.
+ */
+const THUMB_WIDTH = 48;
+const THUMB_HEIGHT = 60;
+
+/**
+ * One cell of the "Miniatura" column.
+ *
+ * The photography is shot on white, so the box keeps the same light plate the
+ * catalog card uses — a dark tile would show a white rectangle. `alt=""` is
+ * correct: the product name is already in the adjacent cell, so announcing it
+ * again is noise for a screen reader.
+ */
+function VariantThumbnail({ url, name }: { url: string | null; name: string }) {
+  if (!url) {
+    return (
+      <div
+        style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
+        className="flex items-center justify-center border border-krov-smoke/70 bg-krov-graphite text-[9px] uppercase tracking-wider text-krov-ash"
+        title={`${name} — sin imagen`}
+      >
+        —
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
+      className="relative overflow-hidden border border-krov-smoke/70 bg-krov-linen"
+    >
+      <Image
+        src={url}
+        alt=""
+        fill
+        sizes={`${THUMB_WIDTH}px`}
+        className="object-contain p-1"
+      />
+    </div>
+  );
+}
 
 interface ProductListAdminProps {
   /** One page of variants, fetched + paginated server-side. */
@@ -76,6 +123,7 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
       <table className="min-w-full text-sm text-left text-krov-bone">
         <thead className="bg-krov-graphite text-krov-rose uppercase text-xs tracking-wider">
           <tr>
+            <th className="px-4 py-3">Miniatura</th>
             <th className="px-4 py-3">SKU</th>
             <th className="px-4 py-3">Producto</th>
             <th className="px-4 py-3">Marca</th>
@@ -84,7 +132,6 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
             <th className="px-4 py-3">Precio</th>
             <th className="px-4 py-3">Mayorista</th>
             <th className="px-4 py-3">Stock</th>
-            <th className="px-4 py-3">Categorías</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3 text-right">Acciones</th>
           </tr>
@@ -99,6 +146,9 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
                 key={v.variant_id}
                 className="border-t border-krov-smoke/70 hover:bg-krov-graphite/60 transition-colors"
               >
+                <td className="px-4 py-3">
+                  <VariantThumbnail url={v.image_url} name={v.name} />
+                </td>
                 <td className="px-4 py-3 font-mono text-xs text-krov-ash">
                   {v.sku}
                 </td>
@@ -158,11 +208,6 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
                   >
                     {v.product_type === "decant" ? "X" : v.stock}
                   </span>
-                </td>
-                <td className="px-4 py-3 text-krov-ash">
-                  {v.categories.length > 0
-                    ? v.categories.map((c) => c.name).join(", ")
-                    : "—"}
                 </td>
                 <td className="px-4 py-3">
                   <span

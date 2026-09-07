@@ -1,15 +1,3 @@
--- ============================================================================
--- AROMA PERFUMERÍA — Production Database Schema
--- Platform: Supabase (PostgreSQL 15+)
--- Version:  1.0.0
--- ============================================================================
--- This script is idempotent-safe and ordered by dependency.
--- Run it inside a Supabase SQL Editor or via psql against the project DB.
--- ============================================================================
--- Context Schema:
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
-
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
@@ -22,8 +10,8 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   experience_points integer NOT NULL DEFAULT 0 CHECK (experience_points >= 0),
-  username text CHECK (username IS NULL OR username ~ '^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$'),
-  show_in_ranking boolean NOT NULL DEFAULT false CHECK (show_in_ranking = false OR username IS NOT NULL),
+  username text CHECK (username IS NULL OR username ~ '^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$'::text),
+  show_in_ranking boolean NOT NULL DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
@@ -272,6 +260,20 @@ CREATE TABLE public.wholesale_profiles (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT wholesale_profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT wholesale_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.order_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  notification_type text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'sending'::text, 'sent'::text, 'failed'::text])),
+  attempts integer NOT NULL DEFAULT 0,
+  provider_message_id text,
+  error_message text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  sent_at timestamp with time zone,
+  CONSTRAINT order_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT order_notifications_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 --END OF SCHEMA
 

@@ -14,7 +14,12 @@
  */
 
 import { z } from "zod";
-import { findCanton, findProvince, isValidCantonCode } from "@/lib/cr-geo";
+import {
+  findCanton,
+  findDistrictByName,
+  findProvince,
+  isValidCantonCode,
+} from "@/lib/cr-geo";
 import type { CartLineItem } from "@/types/product";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,7 +44,16 @@ const customerSchema = z.object({
     .max(20, { message: "Teléfono demasiado largo" }),
 });
 
-const shippingSchema = z.object({
+/**
+ * The shipping fields as plain shape, with no cross-field rule attached.
+ *
+ * Kept separate from `shippingSchema` because `.superRefine()` returns a schema
+ * that can no longer be `.extend()`ed, and the API payload schema below has to
+ * add canton_name/province_name to exactly these fields. One shape, extended
+ * once, with the same rule applied to both — rather than two shapes that could
+ * drift.
+ */
+const shippingShape = z.object({
   address: z
     .string()
     .trim()
@@ -48,20 +62,61 @@ const shippingSchema = z.object({
   canton_code: z
     .string()
     .refine(isValidCantonCode, { message: "Selecciona un cantón válido" }),
-  // district + reference: optional in the payload, but the form fields always
-  // submit strings (possibly empty). Empty strings are allowed here; they get
-  // stripped to undefined in buildCheckoutPayload.
   district: z
-  .string()
-  .trim()
-  .min(1, { message: "El distrito es requerido" })
-  .max(100, { message: "Distrito demasiado largo" }),
+    .string()
+    .trim()
+    .min(1, { message: "El distrito es requerido" })
+    .max(100, { message: "Distrito demasiado largo" }),
   reference: z
-  .string()
-  .trim()
-  .max(200, { message: "Referencia demasiado larga" })
-  .optional(),
+    .string()
+    .trim()
+    .max(200, { message: "Referencia demasiado larga" })
+    .optional(),
+  /**
+   * "I'm in Cariari centro" — an INTENT, not an entitlement.
+   *
+   * Intentionally unvalidated against the address here. The server does not
+   * trust it either way: `resolveShippingCost` re-derives eligibility from the
+   * cantón and district, so a forged `true` on a San José address simply has
+   * no effect. Rejecting it instead would turn a harmless stale checkbox — the
+   * customer ticked it, then changed cantón — into a submit-blocking error.
+   */
+  local_delivery: z.boolean().optional(),
 });
+
+/**
+ * The district must actually belong to the cantón.
+ *
+ * A cross-field rule, because neither field can be judged alone: "Cariari" is a
+ * real district and "401" is a real cantón, but "Cariari in cantón 401" is not a
+ * real place. This is also what makes the Cariari shipping rule safe — without
+ * it a hand-crafted payload could name any district under any cantón and claim a
+ * local delivery rate it isn't entitled to.
+ *
+ * Applied to BOTH the form schema and the server-side payload schema. The
+ * server one is the one that matters: the browser can be bypassed entirely.
+ *
+ * Skipped when the cantón is itself invalid — that field already carries its own
+ * error, and adding "this district isn't in cantón ''" on top of it is noise.
+ */
+function requireDistrictInCanton(
+  shipping: { canton_code: string; district: string },
+  ctx: z.RefinementCtx
+): void {
+  if (!isValidCantonCode(shipping.canton_code)) return;
+  if (findDistrictByName(shipping.canton_code, shipping.district)) return;
+
+  const canton = findCanton(shipping.canton_code);
+  ctx.addIssue({
+    code: "custom",
+    path: ["district"],
+    message: canton
+      ? `Selecciona un distrito válido de ${canton.name}`
+      : "Selecciona un distrito válido",
+  });
+}
+
+const shippingSchema = shippingShape.superRefine(requireDistrictInCanton);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form schema (what react-hook-form validates)
@@ -109,18 +164,20 @@ const lineItemSchema = z.object({
     .max(99, { message: "quantity excede el máximo permitido" }),
 });
 
-const shippingPayloadSchema = shippingSchema.extend({
-  canton_name: z
-    .string()
-    .trim()
-    .min(1, { message: "shipping.canton_name es requerido" })
-    .max(100),
-  province_name: z
-    .string()
-    .trim()
-    .min(1, { message: "shipping.province_name es requerido" })
-    .max(100),
-});
+const shippingPayloadSchema = shippingShape
+  .extend({
+    canton_name: z
+      .string()
+      .trim()
+      .min(1, { message: "shipping.canton_name es requerido" })
+      .max(100),
+    province_name: z
+      .string()
+      .trim()
+      .min(1, { message: "shipping.province_name es requerido" })
+      .max(100),
+  })
+  .superRefine(requireDistrictInCanton);
 
 /**
  * Reference to this checkout's live pending order, echoed back by the client on
@@ -165,7 +222,13 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
  */
 export const checkoutFormDefaults: CheckoutFormValues = {
   customer: { name: "", email: "", phone: "" },
-  shipping: { address: "", canton_code: "", district: "", reference: "" },
+  shipping: {
+    address: "",
+    canton_code: "",
+    district: "",
+    reference: "",
+    local_delivery: false,
+  },
   notes: "",
   // Card is the default: it completes in-page, whereas SINPE hands the customer a
   // manual transfer + a wait for admin validation.
@@ -195,6 +258,8 @@ export interface CheckoutPayload {
     province_name: string;
     district?: string;
     reference?: string;
+    /** See the schema note — an intent the server re-checks, never a price. */
+    local_delivery?: boolean;
   };
   items: Array<{
     variant_id: string;
@@ -258,6 +323,7 @@ export function buildCheckoutPayload(
       province_name: province.name,
       district: formValues.shipping.district.trim(),
       reference: optional(formValues.shipping.reference),
+      local_delivery: formValues.shipping.local_delivery === true,
     },
     items: cartItems.map((item) => ({
       variant_id: item.variant_id,

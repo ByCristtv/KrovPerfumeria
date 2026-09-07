@@ -32,6 +32,12 @@ export interface AdminVariantRow {
   description: string | null;
   brand: string;
   categories: AdminProductCategory[];
+  /**
+   * Main image for this variant — its own image when one exists, otherwise the
+   * parent product's first image (resolved in `admin_list_product_variants`).
+   * `null` when the product has no images; the table renders a placeholder.
+   */
+  image_url: string | null;
 }
 export interface ProductVariant {
   id: string;

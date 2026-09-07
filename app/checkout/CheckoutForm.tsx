@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import PaymentMethodSelector from "./PaymentMethodSelector";
+import DistrictSelect from "@/components/ui/DistrictSelect";
+import {
+  LOCAL_DELIVERY_AREA,
+  isLocalDeliveryArea,
+} from "@/lib/shipping/localDelivery";
 import {
   findCanton,
   getCantones,
@@ -38,6 +43,18 @@ export default function CheckoutForm({
   // sync is needed. If we add programmatic canton resets later (e.g., "use my
   // saved address" button), revisit and pass the new province explicitly.
   const watchedCantonCode = watch("shipping.canton_code");
+  const watchedDistrict = watch("shipping.district");
+  const watchedLocalDelivery = watch("shipping.local_delivery");
+
+  /**
+   * The opt-in only exists for one address. Derived during render from the two
+   * fields it depends on, so it appears and disappears in the same commit the
+   * address changes — no effect, nothing to fall out of sync.
+   */
+  const showLocalDelivery = isLocalDeliveryArea({
+    canton_code: watchedCantonCode,
+    district: watchedDistrict,
+  });
   const watchedPaymentMethod = watch("payment_method");
 
   // The province the user picked by hand. Authoritative ONLY while no cantón is
@@ -61,8 +78,52 @@ export default function CheckoutForm({
     setProvinceOverride(e.target.value);
     // Drop the cantón — the previous one belongs to the old province. This also
     // hands control back to `provinceOverride` above, since the derived lookup
-    // now misses.
+    // now misses. The district goes with it: it belonged to the old cantón.
     setValue("shipping.canton_code", "", { shouldValidate: false });
+    clearDistrict();
+  };
+
+  /**
+   * Changing the cantón invalidates the district beneath it.
+   *
+   * Clearing it is the point: leaving the old value would let a customer submit
+   * a district that does not exist in the cantón they just picked — the exact
+   * mismatch the schema's cross-field check now rejects, except they would only
+   * find out at submit time. Cleared, the dropdown simply asks again.
+   */
+  const handleCantonChange = (cantonCode: string) => {
+    setValue("shipping.canton_code", cantonCode, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    clearDistrict();
+  };
+
+  const handleDistrictChange = (districtName: string) => {
+    setValue("shipping.district", districtName, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    clearLocalDelivery();
+  };
+
+  /** Reset without validating: an empty district mid-edit is not an error yet. */
+  const clearDistrict = () => {
+    setValue("shipping.district", "", { shouldValidate: false });
+    clearLocalDelivery();
+  };
+
+  /**
+   * Drop the local-delivery opt-in whenever the address moves.
+   *
+   * Not load-bearing for correctness — both the summary preview and the server
+   * re-derive eligibility, so a stale `true` never lowers a price on its own.
+   * It is about consent: a box that stays ticked while hidden, and silently
+   * reapplies if the customer navigates back to Cariari, is not something they
+   * agreed to for the new address.
+   */
+  const clearLocalDelivery = () => {
+    setValue("shipping.local_delivery", false, { shouldValidate: false });
   };
 
   return (
@@ -159,12 +220,7 @@ export default function CheckoutForm({
             <select
               name="shipping.canton_code"
               value={watchedCantonCode}
-              onChange={(e) =>
-                setValue("shipping.canton_code", e.target.value, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }
+              onChange={(e) => handleCantonChange(e.target.value)}
               className={inputClass(!!errors.shipping?.canton_code)}
               autoComplete="address-level2"
               disabled={!selectedProvince}
@@ -183,19 +239,57 @@ export default function CheckoutForm({
           </Field>
         </div>
 
+        {/*
+          A dropdown, not free text: the district completes the cantón, and the
+          two together are what the shipping rules read. Typed districts were
+          unverifiable — "Cariari" could mean anywhere — so the options are
+          filtered to the chosen cantón and the value is always a canonical name.
+        */}
         <Field
           label="Distrito"
           error={errors.shipping?.district?.message}
           required
         >
-          <input
-            type="text"
-            autoComplete="address-level3"
-            {...register("shipping.district")}
+          <DistrictSelect
+            name="shipping.district"
+            cantonCode={watchedCantonCode}
+            value={watchedDistrict}
+            onChange={handleDistrictChange}
             className={inputClass(!!errors.shipping?.district)}
-            placeholder="Ej. Carmen"
           />
         </Field>
+
+        {/*
+          Free local delivery, shown only for the one address it applies to.
+
+          Rendered conditionally rather than disabled-but-visible: a permanently
+          greyed "Cariari centro" box on a San José order is noise that invites
+          a question with no useful answer. The saving it promises is re-derived
+          server-side — this control expresses intent, not price.
+        */}
+        {showLocalDelivery && (
+          <label className="flex cursor-pointer items-start gap-3 border border-krov-blood/30 bg-krov-blood/[0.06] p-4">
+            <input
+              type="checkbox"
+              checked={watchedLocalDelivery === true}
+              onChange={(e) =>
+                setValue("shipping.local_delivery", e.target.checked, {
+                  shouldDirty: true,
+                })
+              }
+              className="mt-0.5 h-4 w-4 shrink-0 accent-krov-blood"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-krov-bone">
+                {LOCAL_DELIVERY_AREA.optInLabel}
+              </span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-krov-dust">
+                Entregamos gratis dentro de {LOCAL_DELIVERY_AREA.optInLabel}.
+                Marca esta casilla solo si tu dirección está en el centro.
+              </span>
+            </span>
+          </label>
+        )}
 
         <Field
           label="Señas exactas"
