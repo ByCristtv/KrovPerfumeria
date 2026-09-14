@@ -5,15 +5,17 @@ import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 import { supabase } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/format";
+import { findCanton, findProvince } from "@/lib/cr-geo";
 import {
-  getProvinces,
-  getCantones,
-  findCanton,
-  findProvince,
-} from "@/lib/cr-geo";
+  emptyAddressSelection,
+  isCoherentAddressSelection,
+  type AddressSelection,
+} from "@/lib/cr-geo/selection";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
+import AdminAddressFields from "./AdminAddressFields";
+import Field from "./Field";
 import { createAdminOrderAction } from "../actions";
 import type { AdminOrderInput, AdminShippingMethod } from "@/types/adminOrder";
 import type { AdminVariantRow } from "@/types/product";
@@ -52,9 +54,12 @@ export default function AdminOrderCreateView() {
   const [email, setEmail] = useState("");
 
   // ── Shipping ──
-  const [provinceCode, setProvinceCode] = useState("");
-  const [cantonCode, setCantonCode] = useState("");
-  const [district, setDistrict] = useState("");
+  // The three geographic levels move together, so they are held as ONE value:
+  // the cascade's reset rules (lib/cr-geo/selection) return the next complete
+  // selection, which makes "province changed, so the district below it is gone"
+  // a single atomic state update instead of three that can interleave.
+  const [address, setAddress] = useState<AddressSelection>(emptyAddressSelection);
+  const { cantonCode } = address;
   const [exactAddress, setExactAddress] = useState("");
   const [reference, setReference] = useState("");
   const [method, setMethod] = useState<AdminShippingMethod>("delivery");
@@ -72,9 +77,6 @@ export default function AdminOrderCreateView() {
   const [shippingLoading, setShippingLoading] = useState(false);
 
   const { data: variants = [], isLoading: variantsLoading } = useAdminProducts();
-
-  const provinces = getProvinces();
-  const cantones = getCantones(provinceCode);
 
   // ── Derived totals ──
   const subtotal = useMemo(
@@ -156,13 +158,16 @@ export default function AdminOrderCreateView() {
 
   // ── Submit ──
   const handleSubmit = () => {
-    const canton = findCanton(cantonCode);
-    const province = findProvince(provinceCode);
+    const canton = findCanton(address.cantonCode);
+    const province = findProvince(address.provinceCode);
 
     if (!name.trim()) return warn("Ingresa el nombre del cliente.");
     if (phone.trim().length < 8) return warn("Ingresa un teléfono válido (mín. 8 dígitos).");
-    if (method === "delivery" && (!canton || !province))
-      return warn("Selecciona provincia y cantón.");
+    if (!canton || !province) return warn("Selecciona provincia y cantón.");
+    // The selects only offer valid combinations; this catches a selection left
+    // inconsistent by a stale saved value before the server has to reject it.
+    if (!isCoherentAddressSelection(address))
+      return warn("El distrito no pertenece al cantón seleccionado.");
     if (exactAddress.trim().length < 5) return warn("Ingresa las señas de entrega.");
     if (lines.length === 0) return warn("Agrega al menos un producto.");
     if (discountValue > subtotal + (shippingCost ?? 0))
@@ -176,10 +181,10 @@ export default function AdminOrderCreateView() {
       },
       shipping: {
         address: exactAddress.trim(),
-        canton_code: cantonCode,
-        canton_name: canton?.name ?? "",
-        province_name: province?.name ?? "",
-        district: district.trim() || undefined,
+        canton_code: canton.code,
+        canton_name: canton.name,
+        province_name: province.name,
+        district: address.district.trim() || undefined,
         reference: reference.trim() || undefined,
       },
       items: lines.map((l) => ({
@@ -197,8 +202,8 @@ export default function AdminOrderCreateView() {
         await Swal.fire({
           icon: "success",
           title: "Pedido creado",
-          text: `#${result.data.order_number} · pendiente de pago.`,
-          timer: 1600,
+          text: `#${result.data.order_number} · ${result.message}`,
+          timer: 2400,
           showConfirmButton: false,
         });
         router.push(`/admin/orders/${result.data.order_id}`);
@@ -248,37 +253,7 @@ export default function AdminOrderCreateView() {
             {/* Shipping */}
             <Panel title="Entrega">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Provincia">
-                  <select
-                    className="adm-input"
-                    value={provinceCode}
-                    onChange={(e) => {
-                      setProvinceCode(e.target.value);
-                      setCantonCode("");
-                    }}
-                  >
-                    <option value="">— Selecciona —</option>
-                    {provinces.map((p) => (
-                      <option key={p.code} value={p.code}>{p.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Cantón">
-                  <select
-                    className="adm-input"
-                    value={cantonCode}
-                    onChange={(e) => setCantonCode(e.target.value)}
-                    disabled={!provinceCode}
-                  >
-                    <option value="">{provinceCode ? "— Selecciona —" : "Provincia primero"}</option>
-                    {cantones.map((c) => (
-                      <option key={c.code} value={c.code}>{c.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Distrito">
-                  <input className="adm-input" value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="Ej. Carmen" />
-                </Field>
+                <AdminAddressFields value={address} onChange={setAddress} />
                 <Field label="Referencia (opcional)">
                   <input className="adm-input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ej. frente al parque" />
                 </Field>
@@ -506,25 +481,6 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       <h2 className="mb-4 text-xs uppercase tracking-wider text-krov-rose">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Field({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={`block ${className}`}>
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-krov-ash">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }
 

@@ -31,6 +31,12 @@ export interface CustomerEmailContext {
  * method (per the business rules):
  *   • Card  → "Confirmado / Pagado" + a payment-received message.
  *   • SINPE → "Pago pendiente de verificación" + a complete-your-transfer message.
+ *   • other → the same pending status, but WITHOUT naming a payment method.
+ *
+ * That third branch exists for orders an admin records by hand (WhatsApp, phone,
+ * in person): they carry no payment provider, and telling such a customer to
+ * "complete your SINPE transfer" would instruct them to do something nobody
+ * agreed to. Everything else about the email is identical.
  *
  * Dark, elegant Krov styling with explicit colors + `color-scheme` so it renders
  * consistently in both light- and dark-mode email clients. Every dynamic value
@@ -49,12 +55,18 @@ export function renderCustomerOrderConfirmationEmail(
     ? "Confirmado / Pagado"
     : "Pago pendiente de verificación";
   const statusColor = isCard ? brand.green : brand.amber;
-  const methodLabel = isCard ? "Tarjeta de crédito/débito" : "SINPE Móvil";
+  const methodLabel = isCard
+    ? "Tarjeta de crédito/débito"
+    : data.paymentMethod === "sinpe"
+      ? "SINPE Móvil"
+      : "Por coordinar con la tienda";
   const totalLabel = isCard ? "Total pagado" : "Total por pagar";
 
   const message = isCard
     ? "¡Gracias por tu compra! Recibimos tu pago correctamente y ya estamos preparando tu pedido."
-    : "¡Gracias por tu pedido! Tu pago por SINPE Móvil está marcado como PENDIENTE. Por favor completa la transferencia y envíanos el número de comprobante si aún no lo has hecho. Nuestro equipo lo verificará pronto para procesar tu pedido.";
+    : data.paymentMethod === "sinpe"
+      ? "¡Gracias por tu pedido! Tu pago por SINPE Móvil está marcado como PENDIENTE. Por favor completa la transferencia y envíanos el número de comprobante si aún no lo has hecho. Nuestro equipo lo verificará pronto para procesar tu pedido."
+      : "¡Gracias por tu pedido! Lo registramos con el pago PENDIENTE. Coordinaremos contigo el método y la confirmación del pago para procesarlo. Si algún dato de este resumen no coincide con lo que acordamos, escríbenos y lo corregimos.";
 
   const body =
     messageBlock(message, statusColor) +

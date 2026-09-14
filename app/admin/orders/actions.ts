@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import type { Json } from "@/types/database";
 import type { AdminOrderInput, AdminOrderResult } from "@/types/adminOrder";
 import { notifyOrderPaid } from "@/lib/notifications/orderNotifier";
+import {
+  createAdminOrder,
+  type CustomerNotification,
+} from "@/lib/orders/adminOrderService";
 
 /**
  * Server actions for admin order management UI (Phase 7).
@@ -183,39 +186,44 @@ export async function markOrderPaidAction(
 export async function createAdminOrderAction(
   input: AdminOrderInput
 ): Promise<ActionResult<AdminOrderResult>> {
-  // Light pre-flight validation; the RPC is the authoritative gatekeeper.
-  if (!input?.customer?.name?.trim()) {
-    return { ok: false, message: "El nombre del cliente es obligatorio." };
-  }
-  if (!input?.customer?.phone?.trim()) {
-    return { ok: false, message: "El teléfono del cliente es obligatorio." };
-  }
-  if (!input?.shipping?.canton_code) {
-    return { ok: false, message: "Selecciona un cantón válido." };
-  }
-  if (!input?.shipping?.address?.trim()) {
-    return { ok: false, message: "Las señas de entrega son obligatorias." };
-  }
-  if (!Array.isArray(input.items) || input.items.length === 0) {
-    return { ok: false, message: "Agrega al menos un producto al pedido." };
-  }
-
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("place_admin_order", {
-    p_payload: input as unknown as Json,
-  });
+  const outcome = await createAdminOrder({ supabase }, input);
 
-  if (error) {
-    return rpcError(error, fallbackMessages.create);
+  if (!outcome.ok) {
+    return outcome.kind === "validation"
+      ? { ok: false, message: outcome.message }
+      : rpcError(outcome.error, fallbackMessages.create);
   }
 
   revalidatePath("/admin/orders");
 
   return {
     ok: true,
-    message: "Pedido creado. Pendiente de pago.",
-    data: data as unknown as AdminOrderResult,
+    message:
+      "Pedido creado. Pendiente de pago." +
+      confirmationNote(outcome.notification),
+    data: outcome.data,
   };
+}
+
+/**
+ * A one-line postscript about the customer confirmation, appended to the success
+ * message. Never changes `ok`: the order is created either way, and the admin
+ * needs to know whether to follow up by hand — not to be told the sale failed.
+ * Silent when there was no address to write to, which is the ordinary case for a
+ * WhatsApp order.
+ */
+function confirmationNote(notification: CustomerNotification): string {
+  if (!notification.attempted) return "";
+  switch (notification.status) {
+    case "sent":
+      return " Se envió la confirmación al cliente.";
+    case "failed":
+      return " No se pudo enviar el correo de confirmación; avísale al cliente por otro medio.";
+    default:
+      // "skipped" — already sent for this order, or the notifier declined it.
+      return "";
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

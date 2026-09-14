@@ -17,7 +17,7 @@ export const FOOTER_CONTACT = {
   // PLACEHOLDER — no support email is configured in the project yet.
   email: "contacto@krovperfumeria.cr",
   whatsappUrl: CONTACT.whatsapp,
-  whatsappDisplay: "+506 7138 7812",
+  whatsappDisplay: "+506 7143 4066",
   // PLACEHOLDER — confirm real business hours.
   hours: "Lunes a Sábado · 9:00 AM – 6:00 PM",
   location: "Costa Rica",
