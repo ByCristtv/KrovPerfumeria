@@ -21,22 +21,42 @@ import { updateRankingSettingsAction } from "@/app/profile/actions";
 interface RankingSettingsCardProps {
   username: string | null;
   showInRanking: boolean;
+  /**
+   * `profiles.is_profile_public` — whether other people can FIND this account
+   * in /friends. A different column from `showInRanking`, displayed separately
+   * below even though one switch currently writes both, so the card never
+   * implies the two are one thing.
+   */
+  isProfilePublic: boolean;
   /** Invalidates the cached account query so the card re-reads what was saved. */
   onSaved: () => void;
 }
 
 /**
- * Username + leaderboard opt-in, on /profile.
+ * Username + public-profile opt-in, on /profile.
  *
  * Follows the same shape as PhoneCard and AddressCard: the card face states the
  * current setting, an "Editar" action opens a modal, and one Save writes. Both
  * fields go in the same modal deliberately — they are not independent (the
  * toggle depends on the username), and splitting them into two save paths would
  * let a user commit a cleared username while the opt-in was still on.
+ *
+ * ONE switch, TWO columns. It writes `show_in_ranking` (appear on the public
+ * leaderboard) and `is_profile_public` (be findable by username in /friends),
+ * because a single "my profile is public" decision is what a customer actually
+ * has an opinion about — offering two near-identical privacy switches invites
+ * the state nobody wants, "hidden but findable". The card still shows the two
+ * resulting states as separate badges and the action still writes them through
+ * separate paths, so splitting the control later needs no migration.
+ *
+ * Because the switch is now a privacy control and not just a leaderboard
+ * preference, its label and help text state BOTH consequences. Understating
+ * what a privacy toggle does is the one thing this card must not do.
  */
 export default function RankingSettingsCard({
   username,
   showInRanking,
+  isProfilePublic,
   onSaved,
 }: RankingSettingsCardProps) {
   const usernameFieldId = useId();
@@ -94,7 +114,7 @@ export default function RankingSettingsCard({
   return (
     <Card>
       <CardHeading
-        title="Ranking público"
+        title="Perfil público"
         action={{ label: username ? "Editar" : "Configurar", onClick: openModal }}
       />
 
@@ -102,28 +122,41 @@ export default function RankingSettingsCard({
         {username ?? "Sin nombre de usuario"}
       </p>
 
-      <div className="mt-2">
+      {/* Two badges, not one: they report two different columns. Today one
+          switch moves both, so they will read the same — which is exactly why
+          showing them separately is worth the line, since the day they can
+          diverge the card already says so. */}
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <Badge label={showInRanking ? "Visible en el ranking" : "Oculto"} />
+        <Badge label={isProfilePublic ? "Perfil encontrable" : "Perfil privado"} />
       </div>
 
       <p className="text-white/35 text-xs mt-2.5 leading-relaxed">
         {showInRanking
-          ? "Tu nombre de usuario, tu XP y tu rango son visibles en el ranking público."
-          : "Elige un nombre de usuario y actívalo para competir en el ranking."}
+          ? "Tu nombre de usuario, tu XP y tu rango son visibles en el ranking público, y otras personas pueden encontrarte por tu nombre de usuario."
+          : "Elige un nombre de usuario y actívalo para competir en el ranking y que tus amigos puedan encontrarte."}
       </p>
 
-      <Link
-        href="/ranking"
-        className="mt-3 inline-block text-krov-rose text-xs hover:underline"
-      >
-        Ver el ranking
-      </Link>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        <Link
+          href="/ranking"
+          className="inline-block text-krov-rose text-xs hover:underline"
+        >
+          Ver el ranking
+        </Link>
+        <Link
+          href="/friends"
+          className="inline-block text-krov-rose text-xs hover:underline"
+        >
+          Buscar amigos
+        </Link>
+      </div>
 
       <Modal
         open={open}
         onClose={() => !saving && setOpen(false)}
-        title="Ranking público"
-        subtitle="Tu nombre de usuario y tu visibilidad en el Top 10"
+        title="Perfil público"
+        subtitle="Tu nombre de usuario, el Top 10 y quién puede encontrarte"
         closeOnBackdrop={!saving}
       >
         <div className="space-y-4">
@@ -171,8 +204,8 @@ export default function RankingSettingsCard({
 
             <p id={toggleHelpId} className="mt-2.5 text-xs leading-relaxed text-white/40">
               {usernameOk
-                ? "Al activarlo, tu nombre de usuario, tu XP y tu rango aparecen públicamente en el ranking. No mostramos tu nombre real, tu correo ni ningún otro dato."
-                : "Necesitas un nombre de usuario válido para aparecer en el ranking."}
+                ? "Al activarlo, tu nombre de usuario, tu XP y tu rango aparecen públicamente en el ranking, y cualquier persona con cuenta puede encontrarte buscando tu nombre de usuario. No mostramos tu nombre real, tu correo, tu teléfono, tu dirección ni tus pedidos."
+                : "Necesitas un nombre de usuario válido para aparecer en el ranking o ser encontrable."}
             </p>
           </div>
 
@@ -222,10 +255,13 @@ function RankingToggle({
         disabled ? "cursor-not-allowed" : "cursor-pointer"
       }`}
     >
+      {/* The label names BOTH consequences of the switch. It has to: this is a
+          privacy control, and "Aparecer en el ranking" alone would not tell a
+          user that strangers can also look them up. */}
       <span
         className={`text-sm ${disabled ? "text-white/35" : "text-white"}`}
       >
-        Aparecer en el ranking
+        Aparecer en el ranking y permitir que me encuentren
       </span>
 
       <span className="relative inline-flex shrink-0 items-center">

@@ -9,6 +9,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useIsMounted } from "@/hooks/useIsMounted";
 import KrovLogo from "@/components/brand/KrovLogo";
 import {
+  AUTH_NAV_LINKS,
   HOME_HREF,
   NAV_LINKS,
   isCurrentRoute,
@@ -43,6 +44,12 @@ export default function Navbar() {
   }, [menuOpen]);
 
   const cartBadge = mounted ? totalItems : 0;
+
+  // One list for both the desktop bar and the drawer, so they cannot disagree
+  // about which entries exist. The signed-in extras (currently just "Amigos")
+  // are appended rather than interleaved: they stay after the public
+  // destinations, and a guest gets exactly the list they had before.
+  const links = isAuthenticated ? [...NAV_LINKS, ...AUTH_NAV_LINKS] : NAV_LINKS;
 
   return (
     <>
@@ -119,7 +126,7 @@ export default function Navbar() {
 
               {/* Centred navigation */}
               <ul className="hidden lg:flex items-center justify-center gap-9">
-                {NAV_LINKS.map((link) => (
+                {links.map((link) => (
                   <li key={link.href}>
                     <NavLink
                       href={link.href}
@@ -200,7 +207,7 @@ export default function Navbar() {
         >
           <div className="px-6 pt-4 pb-9">
             <ul className="flex flex-col">
-              {NAV_LINKS.map((link, i) => {
+              {links.map((link, i) => {
                 const active = isCurrentRoute(pathname, link.href);
                 return (
                   <li key={link.href}>

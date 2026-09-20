@@ -1,0 +1,513 @@
+KROV PERFUMERY — SOCIAL / FRIENDS FEATURE CONTEXT
+
+PROJECT CONTEXT
+
+KROV Perfumería is an existing production e-commerce application focused on perfume sales.
+
+Main technology stack:
+
+* Next.js 16 with App Router
+* React
+* TypeScript
+* Tailwind CSS
+* TanStack Query v5 for server state
+* Zustand for appropriate client-side/global state
+* Supabase
+
+  * PostgreSQL
+  * Authentication
+  * Storage
+  * Row Level Security
+  * PostgreSQL RPC functions
+* Existing order, checkout, inventory, XP/ranking, profile and admin systems
+
+This is an existing production application. The social functionality described below must be integrated into the current architecture without unnecessarily rewriting or modifying unrelated business logic.
+
+Do not modify checkout, payments, stock management, order creation, wholesale logic, XP assignment or other production-critical flows unless explicitly required by the social feature.
+
+Prefer extending the existing architecture and reusable components instead of creating parallel systems.
+
+==================================================
+FEATURE OVERVIEW
+================
+
+A new social feature is being introduced to KROV.
+
+Registered customers will be able to:
+
+1. Decide whether their social profile is public or private.
+2. Find public users through a username search.
+3. Send friend requests.
+4. Cancel outgoing friend requests.
+5. Receive friend requests.
+6. Accept or reject friend requests.
+7. Become mutual friends.
+8. View their friends list.
+9. Remove friends.
+10. Visit a friend's profile.
+11. View selected social information about that friend.
+12. View the unique fragrances/products that the friend has previously purchased from KROV.
+
+This should behave as a small social subsystem inside the existing e-commerce application rather than becoming tightly coupled to checkout or orders.
+
+==================================================
+PROFILE PRIVACY
+===============
+
+The application previously used the existing ranking visibility setting as the user's public visibility option.
+
+The database architecture is being separated conceptually into:
+
+* show_in_ranking
+* is_profile_public
+
+These represent different responsibilities.
+
+show_in_ranking:
+Controls whether the customer participates in the public XP ranking.
+
+is_profile_public:
+Controls whether the customer is discoverable through the social user search.
+
+The UI may temporarily continue presenting these options together depending on the current application implementation, but the underlying architecture must treat them as distinct concepts.
+
+A private user:
+
+* Must not appear in social user search results.
+* Cannot normally receive new friend requests through search.
+* Does NOT automatically lose existing friends.
+* Existing friends should continue to access their friend profile.
+
+Changing a profile from public to private must therefore affect discoverability, not destroy existing friendships.
+
+==================================================
+CURRENT PROFILE DATA
+====================
+
+The existing profiles table already contains information such as:
+
+* id
+* full_name
+* avatar_url
+* experience_points
+* username
+* show_in_ranking
+
+Social functionality should reuse this data.
+
+Do not duplicate username, full name, avatar, XP or similar profile data into friendship tables.
+
+The user's rank is derived from experience_points.
+
+Current KROV ranks are handled by existing application logic. Do not introduce another independent persisted rank value unless the existing architecture already requires it.
+
+The social feature should ultimately display:
+
+* Username
+* Full name
+* Profile picture
+* Current rank
+* Experience points
+
+==================================================
+SOCIAL DATABASE MODEL
+=====================
+
+The social database design uses two distinct concepts:
+
+1. friend_requests
+2. friendships
+
+FRIEND REQUESTS
+
+friend_requests represents the lifecycle of a request between two users.
+
+Relevant conceptual fields include:
+
+* id
+* sender_id
+* receiver_id
+* status
+* created_at
+* updated_at
+* responded_at
+
+Possible statuses:
+
+* pending
+* accepted
+* rejected
+* cancelled
+
+A user cannot send a friend request to themselves.
+
+Only one pending request should exist between the same two users regardless of direction.
+
+For example:
+
+User A -> User B = pending
+
+means another:
+
+User B -> User A = pending
+
+must not simultaneously be created.
+
+FRIENDSHIPS
+
+friendships represents actual mutual friendships.
+
+A friendship is symmetrical.
+
+If A is friends with B, then B is automatically friends with A.
+
+Do not model this as two separate friendship rows.
+
+The database stores a canonical pair:
+
+* user_id_1
+* user_id_2
+
+The existence of that record means the friendship exists.
+
+Friendship state must never be inferred only from an accepted friend request.
+
+==================================================
+SERVER-SIDE SOCIAL OPERATIONS
+=============================
+
+Sensitive relationship mutations should be implemented through existing PostgreSQL/Supabase RPC functions rather than performing unrestricted direct inserts or updates from React.
+
+Expected social operations include functions equivalent to:
+
+* set_social_profile_visibility(...)
+* search_public_users(...)
+* send_friend_request(...)
+* cancel_friend_request(...)
+* get_received_friend_requests()
+* get_sent_friend_requests()
+* accept_friend_request(...)
+* reject_friend_request(...)
+* get_friends()
+* remove_friend(...)
+* get_friend_profile(...)
+* get_friend_purchased_products(...)
+
+The frontend should ideally interact with a typed service/repository layer rather than scattering raw supabase.rpc() calls throughout UI components.
+
+==================================================
+USER SEARCH
+===========
+
+Only authenticated users can use the social user search.
+
+Search should:
+
+* Search by username.
+* Return public users only.
+* Exclude the currently authenticated user.
+* Support partial username matches.
+* Avoid performing meaningless searches for extremely short values.
+* Handle loading, empty and error states.
+* Eventually support pagination or bounded result sizes.
+
+Search results should reveal minimal information.
+
+Initially they should primarily expose:
+
+* user ID
+* username
+* avatar
+* relationship status
+
+Do not expose private fields such as:
+
+* phone
+* email
+* addresses
+* order information
+* payment information
+
+==================================================
+RELATIONSHIP STATES
+===================
+
+Search results need to understand the relationship between the authenticated user and each result.
+
+The expected relationship states are:
+
+none
+No friendship and no pending request exists.
+
+outgoing_pending
+The authenticated user already sent this person a friend request.
+
+incoming_pending
+This person already sent the authenticated user a friend request.
+
+friends
+The two users are already friends.
+
+The UI will eventually map these states to actions.
+
+Typical intended behavior:
+
+none
+→ Show "Agregar"
+
+outgoing_pending
+→ Show "Pendiente"
+→ Allow cancellation
+
+incoming_pending
+→ Indicate that a request from this user is already waiting
+
+friends
+→ Indicate that the users are already friends
+
+==================================================
+FRIEND REQUEST FLOW
+===================
+
+Expected lifecycle:
+
+User A finds User B.
+
+User A:
+Agregar
+↓
+Friend request created
+↓
+User A sees pending state
+
+User B:
+Receives request
+↓
+Can accept or reject
+
+IF ACCEPTED:
+
+A and B become mutual friends.
+
+Both users should see one another in their friends list.
+
+IF REJECTED:
+
+No friendship is created.
+
+The original sender may send another friend request later.
+
+IF CANCELLED:
+
+The pending request ends.
+
+The sender may send another request later.
+
+==================================================
+FRIENDS PORTAL
+==============
+
+The social functionality should eventually have a central portal.
+
+A possible structure is:
+
+/friends
+
+Sections may include:
+
+* Friends
+* Requests
+* Search
+
+The exact UI organization should follow the existing application's visual architecture and component patterns rather than introducing an unrelated design system.
+
+==================================================
+FRIEND PROFILE
+==============
+
+Only existing friends should receive access to the complete friend-profile view.
+
+The profile should eventually show:
+
+* Avatar
+* Username
+* Full name
+* Rank
+* Experience points
+* Unique fragrances/products purchased through KROV
+
+Friendship authorization must be enforced server-side.
+
+It must not depend solely on hiding a React page or button.
+
+==================================================
+PURCHASED FRAGRANCES
+====================
+
+A friend should NOT receive access to another user's orders.
+
+Orders contain private information and must remain protected.
+
+Do NOT expose:
+
+* order IDs unless technically unavoidable internally
+* order numbers
+* quantities purchased
+* item prices
+* order totals
+* discounts
+* shipping addresses
+* shipping references
+* phone numbers
+* email
+* payment information
+* payment references
+
+The feature should expose only a safe projection of unique products/fragrances previously purchased.
+
+Conceptually:
+
+orders
+→ order_items
+→ product_variants
+→ products
+
+Different variants of the same fragrance should be collapsed into one product.
+
+Example:
+
+Hawas Ice 100 ml
+Hawas Ice 10 ml
+Hawas Ice 5 ml
+Khamrah 100 ml
+
+should be displayed socially as:
+
+Hawas Ice
+Khamrah
+
+not as multiple purchases.
+
+Only valid/completed purchases according to KROV's business rules should be eligible.
+
+==================================================
+FRONTEND ARCHITECTURE
+=====================
+
+TanStack Query should be the primary tool for social server state.
+
+Examples of future query keys may include:
+
+["friends"]
+
+["friendRequests", "received"]
+
+["friendRequests", "sent"]
+
+["userSearch", query]
+
+["friendProfile", userId]
+
+["friendProducts", userId]
+
+Mutations should invalidate the relevant queries after success.
+
+Avoid duplicating server state into Zustand unless there is a concrete client-only reason to do so.
+
+Suggested architectural separation:
+
+UI / Components
+↓
+TanStack Query hooks
+↓
+Social service/repository
+↓
+Supabase RPC
+↓
+PostgreSQL + RLS
+
+==================================================
+CODE QUALITY REQUIREMENTS
+=========================
+
+All social implementations should follow these principles:
+
+* TypeScript strictness.
+* Reuse existing application patterns.
+* Avoid unnecessary `any`.
+* Avoid duplicated domain logic.
+* Separate UI from data access.
+* Keep server state in TanStack Query.
+* Keep security decisions server-side.
+* Respect existing Supabase RLS.
+* Prefer existing reusable UI components.
+* Keep functions/components reasonably small.
+* Handle errors explicitly.
+* Provide loading and empty states.
+* Avoid unrelated refactors.
+* Do not change existing production behavior without necessity.
+* Maintain clean architecture boundaries.
+* Prefer simple implementations over unnecessary abstractions.
+
+Before creating new utilities, hooks or components, inspect the repository for an existing equivalent.
+
+==================================================
+IMPLEMENTATION STRATEGY
+=======================
+
+The feature is intentionally being implemented incrementally.
+
+MVP 1 — DISCOVERABILITY
+
+1. Social profile privacy integration.
+2. Social TypeScript types and data-access/service layer.
+3. Public user search.
+4. Relationship-state UI.
+
+MVP 2 — FRIENDSHIP LIFECYCLE
+
+5. Send/cancel friend requests.
+6. Received requests UI.
+7. Accept/reject requests.
+8. Friends portal.
+9. Friends list.
+10. Remove friendship.
+
+MVP 3 — SOCIAL COMMERCE
+
+11. Friend profile.
+12. Purchased fragrances.
+13. Edge-case stabilization.
+14. UX/error improvements.
+15. Realtime behavior if appropriate.
+16. Security review.
+17. Automated/integration tests.
+
+Do not implement future MVP functionality while working on an earlier MVP unless a very small foundational change is technically necessary.
+
+If such a dependency exists, implement only the foundation and clearly document why it was necessary.
+
+==================================================
+IMPORTANT DEVELOPMENT RULE
+==========================
+
+The social feature is being reviewed incrementally.
+
+When given an MVP implementation request:
+
+1. Inspect the existing repository first.
+2. Understand current architecture and conventions.
+3. Implement only the requested MVP scope.
+4. Do not redesign unrelated systems.
+5. Run available linting, type checking and relevant automated tests.
+6. Fix issues caused by the implementation.
+7. Clearly report:
+
+   * Files changed
+   * Architecture decisions
+   * Tests/checks performed
+   * Any assumptions
+   * Anything intentionally deferred to later MVPs
+
+Do not automatically proceed to the next MVP.
+Wait for developer review and approval.

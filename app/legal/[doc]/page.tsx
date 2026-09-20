@@ -132,7 +132,7 @@ export default async function LegalPage({
         <div className="mt-16 border-t border-white/10 pt-8">
           <p className="text-sm text-white/45" style={{ fontFamily: serif }}>
             ¿Tienes preguntas sobre este documento?{" "}
-            <Link href="/contact" className="text-krov-rose underline-offset-4 hover:underline">
+            <Link href="/#canales" className="text-krov-rose underline-offset-4 hover:underline">
               Contáctanos
             </Link>
             .

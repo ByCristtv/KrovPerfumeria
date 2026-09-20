@@ -32,7 +32,11 @@ describe("updateRankingSettingsAction", () => {
       username: "aurora.cr",
       show_in_ranking: true,
     });
-    expect(res.data).toEqual({ username: "aurora.cr", show_in_ranking: true });
+    expect(res.data).toEqual({
+      username: "aurora.cr",
+      show_in_ranking: true,
+      is_profile_public: true,
+    });
   });
 
   it("trims the username before writing", async () => {

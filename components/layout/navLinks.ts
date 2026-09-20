@@ -11,10 +11,14 @@
  * There is deliberately NO "Inicio" entry. The wordmark in the header is the
  * home affordance — it is a link to "/" with an accessible name, which is the
  * convention every storefront user already knows, and duplicating it as a text
- * link spent a slot in a six-item bar on a destination the logo already covers.
- * `isHomeRoute` exists so the header can still mark the logo as the current
- * page for assistive tech, which is the part removing the text link would
- * otherwise have lost.
+ * link spent a bar slot on a destination the logo already covers. `isHomeRoute`
+ * exists so the header can still mark the logo as the current page for
+ * assistive tech, which is the part removing the text link would otherwise
+ * have lost.
+ *
+ * "Identidad" (/about) and "Contacto" (/contact) are gone for the same reason:
+ * both routes were folded into the home page, so those entries would only have
+ * pointed at anchors on a page the wordmark already reaches.
  */
 
 export interface NavLink {
@@ -26,9 +30,24 @@ export interface NavLink {
 export const NAV_LINKS: readonly NavLink[] = [
   { label: "Perfumes", href: "/products" },
   { label: "Ranking y Premios", href: "/ranking" },
-  { label: "Identidad", href: "/about" },
   { label: "Cómo comprar", href: "/howtobuy" },
-  { label: "Contacto", href: "/contact" },
+] as const;
+
+/**
+ * Destinations that only exist once there is a session.
+ *
+ * Deliberately NOT part of NAV_LINKS. Everything in that list is a page a guest
+ * can open and a crawler can index; /friends is neither — `search_public_users`
+ * raises `authentication_required`, so showing the entry to a guest would
+ * advertise a door that only bounces them to /login. Keeping the two lists
+ * apart means the public bar stays a constant, and "who may see this entry" is
+ * a property of the list rather than a condition sprinkled through the header.
+ *
+ * <Navbar> concatenates them for a signed-in visitor, so the desktop bar and
+ * the mobile drawer still read from one source.
+ */
+export const AUTH_NAV_LINKS: readonly NavLink[] = [
+  { label: "Amigos", href: "/friends" },
 ] as const;
 
 /** Where the wordmark points, and the route it represents. */

@@ -24,13 +24,17 @@ describe("NAV_LINKS", () => {
     expect(NAV_LINKS.some((link) => link.label === "Ranking")).toBe(false);
   });
 
+  it("does not link the routes that were folded into the home page", () => {
+    // /about and /contact no longer exist — their sections live on "/".
+    expect(NAV_LINKS.some((link) => link.href === "/about")).toBe(false);
+    expect(NAV_LINKS.some((link) => link.href === "/contact")).toBe(false);
+  });
+
   it("keeps every other destination reachable", () => {
     expect(NAV_LINKS.map((link) => link.href)).toEqual([
       "/products",
       "/ranking",
-      "/about",
       "/howtobuy",
-      "/contact",
     ]);
   });
 
@@ -56,7 +60,7 @@ describe("isCurrentRoute", () => {
   });
 
   it("does not mark unrelated routes as current", () => {
-    expect(isCurrentRoute("/contact", "/ranking")).toBe(false);
+    expect(isCurrentRoute("/howtobuy", "/ranking")).toBe(false);
   });
 
   it("never marks a nav entry current just because the user is home", () => {

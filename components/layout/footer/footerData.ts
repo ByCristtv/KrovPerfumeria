@@ -41,10 +41,12 @@ export const SHOP_LINKS: FooterLink[] = [
 ];
 
 // ---- Column 3 — Información ----
+// The first three are anchors: /about and /contact were folded into the home
+// page, so these jump to the sections rather than to routes of their own.
 export const INFO_LINKS: FooterLink[] = [
-  { label: "Sobre Nosotros", href: "/about" },
-  { label: "Contacto", href: "/contact" },
-  { label: "Preguntas Frecuentes", href: "/contact" },
+  { label: "Sobre Nosotros", href: "/#historia" },
+  { label: "Contacto", href: "/#canales" },
+  { label: "Preguntas Frecuentes", href: "/#faq" },
   { label: "Métodos de Pago", href: "/howtobuy" },
   { label: "Envíos", href: "/howtobuy" },
   { label: "Política de Privacidad", href: "/legal/privacidad" },

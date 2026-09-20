@@ -257,6 +257,97 @@ export type Database = {
           },
         ]
       }
+      friend_requests: {
+        Row: {
+          created_at: string
+          id: string
+          receiver_id: string
+          responded_at: string | null
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          receiver_id: string
+          responded_at?: string | null
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          receiver_id?: string
+          responded_at?: string | null
+          sender_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friend_requests_receiver_id_fkey"
+            columns: ["receiver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friend_requests_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friendships: {
+        Row: {
+          created_at: string
+          friend_request_id: string | null
+          id: string
+          user_id_1: string
+          user_id_2: string
+        }
+        Insert: {
+          created_at?: string
+          friend_request_id?: string | null
+          id?: string
+          user_id_1: string
+          user_id_2: string
+        }
+        Update: {
+          created_at?: string
+          friend_request_id?: string | null
+          id?: string
+          user_id_1?: string
+          user_id_2?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_friend_request_id_fkey"
+            columns: ["friend_request_id"]
+            isOneToOne: false
+            referencedRelation: "friend_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_user_id_1_fkey"
+            columns: ["user_id_1"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_user_id_2_fkey"
+            columns: ["user_id_2"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           brand_name: string
@@ -760,6 +851,7 @@ export type Database = {
           experience_points: number
           full_name: string | null
           id: string
+          is_profile_public: boolean
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           show_in_ranking: boolean
@@ -772,6 +864,7 @@ export type Database = {
           experience_points?: number
           full_name?: string | null
           id: string
+          is_profile_public?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           show_in_ranking?: boolean
@@ -784,6 +877,7 @@ export type Database = {
           experience_points?: number
           full_name?: string | null
           id?: string
+          is_profile_public?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           show_in_ranking?: boolean
@@ -976,6 +1070,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_friend_request: { Args: { p_request_id: string }; Returns: string }
       admin_list_product_variants: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {
@@ -1071,6 +1166,10 @@ export type Database = {
         Args: { p_canton_code: string; p_subtotal: number }
         Returns: Json
       }
+      cancel_friend_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
       claim_guest_orders: {
         Args: { p_email: string; p_user_id: string }
         Returns: number
@@ -1122,11 +1221,64 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_friend_profile: {
+        Args: { p_friend_user_id: string }
+        Returns: {
+          avatar_url: string
+          experience_points: number
+          full_name: string
+          user_id: string
+          username: string
+        }[]
+      }
+      get_friend_purchased_products: {
+        Args: { p_friend_user_id: string }
+        Returns: {
+          brand_name: string
+          image_url: string
+          product_id: string
+          product_name: string
+          product_slug: string
+        }[]
+      }
+      get_friends: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          experience_points: number
+          friend_user_id: string
+          friends_since: string
+          friendship_id: string
+          full_name: string
+          username: string
+        }[]
+      }
       get_ranking_top: {
         Args: { p_limit?: number }
         Returns: {
           experience_points: number
           rank_position: number
+          username: string
+        }[]
+      }
+      get_received_friend_requests: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          experience_points: number
+          request_id: string
+          requested_at: string
+          user_id: string
+          username: string
+        }[]
+      }
+      get_sent_friend_requests: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          request_id: string
+          requested_at: string
+          user_id: string
           username: string
         }[]
       }
@@ -1154,6 +1306,11 @@ export type Database = {
         Returns: number
       }
       register_bulk_stock: { Args: { p_payload: Json }; Returns: Json }
+      reject_friend_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      remove_friend: { Args: { p_friend_user_id: string }; Returns: boolean }
       restore_variant_stock: { Args: { p_order_id: string }; Returns: Json }
       review_wholesale_application: {
         Args: { p_decision: string; p_user_id: string }
@@ -1169,8 +1326,29 @@ export type Database = {
           slug: string
         }[]
       }
+      search_public_users: {
+        Args: { p_limit?: number; p_offset?: number; p_query: string }
+        Returns: {
+          avatar_url: string
+          relationship_status: string
+          user_id: string
+          username: string
+        }[]
+      }
+      send_friend_request: {
+        Args: { p_target_user_id: string }
+        Returns: string
+      }
+      set_social_profile_visibility: {
+        Args: { p_is_public: boolean }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      social_are_friends: {
+        Args: { p_user_a: string; p_user_b: string }
+        Returns: boolean
+      }
       sweep_abandoned_orders: { Args: never; Returns: number }
       transform_to_decant: {
         Args: {

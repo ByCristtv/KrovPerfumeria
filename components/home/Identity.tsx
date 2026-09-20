@@ -112,7 +112,7 @@ export default function Identity() {
           </Reveal>
 
           <Reveal className="mt-10">
-            <Link href="/about" className="krov-btn-outline px-0 hover:border-transparent">
+            <Link href="/#historia" className="krov-btn-outline px-0 hover:border-transparent">
               <span className="krov-underline">Conocé la casa</span>
             </Link>
           </Reveal>

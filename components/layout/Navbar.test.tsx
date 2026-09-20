@@ -147,9 +147,7 @@ describe("Navbar", () => {
       expect(labels).toEqual([
         "Perfumes",
         "Ranking y Premios",
-        "Identidad",
         "Cómo comprar",
-        "Contacto",
       ]);
     });
   });

@@ -173,6 +173,7 @@ export default function ProfileView() {
             <RankingSettingsCard
               username={accountData?.profile?.username ?? null}
               showInRanking={accountData?.profile?.show_in_ranking ?? false}
+              isProfilePublic={accountData?.profile?.is_profile_public ?? false}
               onSaved={refreshAccount}
             />
 

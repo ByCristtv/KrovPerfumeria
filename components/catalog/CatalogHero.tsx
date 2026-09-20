@@ -14,23 +14,11 @@ const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
  */
 export default function CatalogHero() {
   return (
-    <section className="relative overflow-hidden px-5 pb-10 pt-28 sm:px-8 md:pt-36">
+    <section className="relative overflow-hidden px-2 pb-10 pt-8 sm:px-16 md:pt-36">
       <div
         aria-hidden
-        className="krov-aura-wine pointer-events-none absolute -top-48 left-1/4 h-[26rem] w-[26rem] opacity-60"
+        className="krov-aura-wine pointer-events-none absolute -top-28 left-1/4 h-[26rem] w-[26rem] opacity-60"
       />
-
-      <div className="relative mx-auto max-w-7xl">
-
-        <h1
-          className="mt-6 max-w-3xl text-4xl leading-[1.02] text-krov-bone sm:text-5xl md:text-6xl"
-          style={{ fontFamily: serif }}
-        >
-          Explora el
-          
-          <span className="italic text-krov-blush"> catalogo</span>
-        </h1>
-      </div>
     </section>
   );
 }

@@ -11,11 +11,20 @@ import RankingSettingsCard from "./RankingSettingsCard";
 
 const onSaved = vi.fn();
 
-function renderCard(props: { username?: string | null; showInRanking?: boolean } = {}) {
+function renderCard(
+  props: {
+    username?: string | null;
+    showInRanking?: boolean;
+    isProfilePublic?: boolean;
+  } = {}
+) {
   return render(
     <RankingSettingsCard
       username={props.username ?? null}
       showInRanking={props.showInRanking ?? false}
+      // Defaults to the ranking flag: one switch writes both columns, so that
+      // is the only combination the card can currently be handed.
+      isProfilePublic={props.isProfilePublic ?? props.showInRanking ?? false}
       onSaved={onSaved}
     />
   );
@@ -177,6 +186,45 @@ describe("RankingSettingsCard", () => {
         username: "",
         show_in_ranking: false,
       });
+    });
+  });
+
+  describe("social profile visibility", () => {
+    it("reports the private state alongside the ranking state", () => {
+      renderCard();
+      expect(screen.getByText("Oculto")).toBeInTheDocument();
+      expect(screen.getByText("Perfil privado")).toBeInTheDocument();
+    });
+
+    it("reports the findable state once the profile is public", () => {
+      renderCard({ username: "aurora", showInRanking: true });
+      expect(screen.getByText("Visible en el ranking")).toBeInTheDocument();
+      expect(screen.getByText("Perfil encontrable")).toBeInTheDocument();
+    });
+
+    it("reports the two columns independently when they disagree", () => {
+      // Not reachable through this card today, but the badges read two
+      // different fields — this is what stops a future split from silently
+      // rendering one of them as the other.
+      renderCard({ username: "aurora", showInRanking: false, isProfilePublic: true });
+      expect(screen.getByText("Oculto")).toBeInTheDocument();
+      expect(screen.getByText("Perfil encontrable")).toBeInTheDocument();
+    });
+
+    it("names both consequences on the switch, not just the ranking", async () => {
+      // A privacy control has to say it is a privacy control.
+      const user = userEvent.setup();
+      renderCard({ username: "aurora", showInRanking: true });
+      await openEditor(user);
+
+      expect(toggle()).toHaveAccessibleName(/encuentren/i);
+    });
+
+    it("offers a route into the social portal", () => {
+      renderCard({ username: "aurora", showInRanking: true });
+      expect(
+        screen.getByRole("link", { name: /buscar amigos/i })
+      ).toHaveAttribute("href", "/friends");
     });
   });
 

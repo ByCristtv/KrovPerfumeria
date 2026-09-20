@@ -97,7 +97,7 @@ export default function FAQAccordion() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section aria-labelledby="faq-heading">
+    <section id="faq" aria-labelledby="faq-heading" className="scroll-mt-24">
       <div id="faq-heading">
         <SectionHeading
           eyebrow="Preguntas frecuentes"

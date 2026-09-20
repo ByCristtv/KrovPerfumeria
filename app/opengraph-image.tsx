@@ -6,7 +6,7 @@ import { SITE } from "@/lib/seo/site";
  *
  * Placing this at the app root means Next automatically attaches `og:image` and
  * `twitter:image` to every route that doesn't define its own — so shared links
- * to the home page, /about, /contact and /howtobuy stop rendering as bare text.
+ * to the home page, /products and /howtobuy stop rendering as bare text.
  * Product pages override it with the actual bottle shot.
  *
  * Deliberately no remote font fetch: it would add a network hop to every render
