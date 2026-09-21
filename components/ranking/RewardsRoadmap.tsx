@@ -11,6 +11,7 @@ import {
   type RewardsRoadmapViewer,
   type RoadmapStepStatus,
 } from "@/lib/rewards";
+import { TextBone } from "@/components/ui/Skeleton";
 
 interface RewardsRoadmapProps {
   /**
@@ -56,24 +57,18 @@ export default function RewardsRoadmap({
 
   return (
     <section aria-labelledby="rewards-roadmap-heading" className="w-full">
-      <header className="text-center">
-        <p className="krov-eyebrow mb-4">Premios</p>
-        <h2
-          id="rewards-roadmap-heading"
-          className="krov-display text-2xl text-krov-bone sm:text-3xl"
-        >
-          Ruta de recompensas
-        </h2>
-        <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-krov-ash">
-          Cada rango desbloquea un beneficio que puedes reclamar en tu siguiente
-          compra. La experiencia se gana con cada pedido recibido.
-        </p>
-      </header>
+      {/* Identical in the skeleton, so it is NOT animated — only what was a
+          placeholder a moment ago rises in. */}
+      <RoadmapHeader />
 
-      {viewer && <ViewerProgress viewer={viewer} />}
+      {viewer && (
+        <div className="krov-enter">
+          <ViewerProgress viewer={viewer} />
+        </div>
+      )}
 
       {/* ──────── The rail ──────── */}
-      <ol className="mt-10 md:grid md:grid-cols-5 md:gap-2">
+      <ol className="krov-enter-stagger mt-10 md:grid md:grid-cols-5 md:gap-2">
         {steps.map((step, index) => (
           <TimelineStep
             key={step.rank}
@@ -331,23 +326,66 @@ function initialSelection(
   return steps.find((step) => step.reward.kind !== "none")?.rank ?? steps[0].rank;
 }
 
-/** Rail placeholder, sized to the real thing so /ranking doesn't jump on load. */
+/** The roadmap's static masthead — shared with the skeleton so the two match. */
+function RoadmapHeader() {
+  return (
+    <header className="text-center">
+      <p className="krov-eyebrow mb-4">Premios</p>
+      <h2
+        id="rewards-roadmap-heading"
+        className="krov-display text-2xl text-krov-bone sm:text-3xl"
+      >
+        Ruta de recompensas
+      </h2>
+      <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-krov-ash">
+        Cada rango desbloquea un beneficio que puedes reclamar en tu siguiente
+        compra. La experiencia se gana con cada pedido recibido.
+      </p>
+    </header>
+  );
+}
+
+/**
+ * The roadmap while the viewer's XP resolves, sized to the real thing so
+ * /ranking doesn't jump on load.
+ *
+ * It renders the REAL header (static copy, known before any query) plus bones
+ * for the rail and the detail panel. The previous version was the rail alone,
+ * so the header and detail panel (~300px together) appeared on resolve and
+ * pushed the rail down. The one height it cannot know is the signed-in
+ * progress card, which only exists once the query answers.
+ *
+ * Pulses as one region (`krov-skeleton`); the bones themselves are static.
+ */
 export function RewardsRoadmapSkeleton() {
   return (
-    <div className="mt-10 md:grid md:grid-cols-5 md:gap-2" aria-hidden>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex gap-4 pb-7 last:pb-0 md:flex-col md:items-center md:pb-0"
-        >
-          <div className="mt-0.5 h-[15px] w-[15px] shrink-0 animate-pulse rounded-full bg-white/10 md:mt-0" />
-          <div className="w-full md:mt-4">
-            <div className="h-4 w-20 animate-pulse rounded bg-white/10 md:mx-auto" />
-            <div className="mt-2 h-2.5 w-28 animate-pulse rounded bg-white/5 md:mx-auto" />
-            <div className="mt-3 h-3 w-32 animate-pulse rounded bg-white/5 md:mx-auto" />
-          </div>
+    <div className="w-full">
+      <RoadmapHeader />
+
+      <div className="krov-skeleton" aria-hidden>
+        <div className="mt-10 md:grid md:grid-cols-5 md:gap-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex gap-4 pb-7 last:pb-0 md:flex-col md:items-center md:pb-0"
+            >
+              <div className="mt-0.5 h-[15px] w-[15px] shrink-0 rounded-full bg-white/10 md:mt-0" />
+              <div className="w-full md:mt-4">
+                <div className="h-4 w-20 bg-white/10 md:mx-auto" />
+                <div className="mt-2 h-2.5 w-28 bg-white/[0.06] md:mx-auto" />
+                <div className="mt-3 h-3 w-32 bg-white/[0.06] md:mx-auto" />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+
+        {/* Detail panel — same shell and type rhythm as the real one. */}
+        <div className="mt-8 border border-krov-smoke bg-krov-coal p-5 sm:p-6">
+          <TextBone className="text-[10px]" width="6rem" />
+          <TextBone className="mt-2 text-xl sm:text-2xl" width="9rem" strong />
+          <TextBone className="mt-3 text-sm leading-relaxed" width="85%" />
+        </div>
+      </div>
     </div>
   );
 }

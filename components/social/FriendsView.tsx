@@ -10,6 +10,7 @@ import FriendsPortalTabs, {
 import FriendsList from "@/components/social/FriendsList";
 import ReceivedRequestsPanel from "@/components/social/ReceivedRequestsPanel";
 import SearchSection from "@/components/social/SearchSection";
+import { SocialListSkeleton } from "@/components/social/socialUi";
 import { useReceivedRequests } from "@/hooks/useFriendRequests";
 
 /**
@@ -60,17 +61,13 @@ export default function FriendsView() {
       />
 
       <div className="relative mx-auto max-w-2xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
-        <header className="text-center">
-          <p className="krov-eyebrow mb-5">Amigos</p>
-          <h1 className="krov-display text-4xl text-krov-bone md:text-6xl">
-            Tu círculo
-          </h1>
-          <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-krov-ash">
-            Encuentra a otras personas por su nombre de usuario, responde tus
-            solicitudes y administra tu lista de amigos.
-          </p>
-        </header>
+        {/* Rendered identically by the skeleton, so it does not animate: only
+            what was a placeholder a moment ago rises in. */}
+        <FriendsHeader />
 
+        {/* Not animated: the pill is a backdrop-blur surface, and fading its
+            wrapper would blank the blur mid-fade. It swaps in place at the
+            skeleton bar's exact size instead. */}
         <div className="mt-10 sm:mt-12">
           <FriendsPortalTabs
             value={section}
@@ -114,15 +111,54 @@ export default function FriendsView() {
   );
 }
 
-/** Shown while auth resolves, so a signed-in user never sees a guest flash. */
+/** Static masthead, shared by the page and its skeleton. */
+function FriendsHeader() {
+  return (
+    <header className="text-center">
+      <p className="krov-eyebrow mb-5">Amigos</p>
+      <h1 className="krov-display text-4xl text-krov-bone md:text-6xl">
+        Tu círculo
+      </h1>
+      <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-krov-ash">
+        Encuentra a otras personas por su nombre de usuario, responde tus
+        solicitudes y administra tu lista de amigos.
+      </p>
+    </header>
+  );
+}
+
+/**
+ * Shown while auth resolves, so a signed-in user never sees a guest flash.
+ *
+ * Mirrors the real page rather than approximating it: the same wine aura and
+ * container, the REAL header (static copy, known before auth), a tab bar at the
+ * pill's exact height, and `SocialListSkeleton rows={3}` — the very placeholder
+ * FriendsList shows while its query runs. So auth resolving → list loading is
+ * a no-op on screen, and the only visible change is the rows arriving.
+ */
 function FriendsSkeleton() {
   return (
     <div className="relative min-h-screen bg-krov-void">
-      <div className="mx-auto max-w-2xl animate-pulse px-5 pt-28 pb-24 sm:px-8 md:pt-36">
-        <div className="mx-auto h-3 w-24 rounded bg-white/5" />
-        <div className="mx-auto mt-6 h-10 w-72 max-w-full rounded bg-white/5" />
-        <div className="mx-auto mt-12 h-12 w-full max-w-sm rounded-full bg-white/5" />
-        <div className="mt-10 h-40 w-full rounded bg-white/5" />
+      <div
+        aria-hidden
+        className="krov-aura-wine pointer-events-none absolute -top-32 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 opacity-60"
+      />
+      <p role="status" className="sr-only">
+        Cargando…
+      </p>
+
+      <div className="relative mx-auto max-w-2xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
+        <FriendsHeader />
+
+        {/* FriendsPortalTabs: p-1 + border + a py-2.5 label whose line is 15px
+            (text-[10px]) on phones and 16px (text-xs) from sm up. */}
+        <div className="krov-skeleton mt-10 sm:mt-12" aria-hidden>
+          <div className="mx-auto h-[45px] w-full rounded-full bg-white/[0.06] sm:h-[46px] sm:w-[26rem]" />
+        </div>
+
+        <div className="mt-8 sm:mt-10">
+          <SocialListSkeleton rows={3} />
+        </div>
       </div>
     </div>
   );

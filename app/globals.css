@@ -559,6 +559,103 @@ body > * {
   }
 
   /*
+   * ── Loading → content handoff ───────────────────────────────────────────────
+   *
+   * One system for every skeleton and every "data arrived" entrance, so the
+   * handoff feels identical on every route. Rules it follows:
+   *
+   * · Compositor only. Every keyframe below touches `opacity` and `transform`,
+   *   nothing that triggers layout or paint. No `will-change` either: the
+   *   browser promotes the layer for the animation's lifetime on its own, and
+   *   a permanent `will-change` on 20 product cards would pin 20 GPU textures
+   *   long after the animation finished.
+   *
+   * · `.krov-skeleton` pulses the REGION, not each bone. One animation per
+   *   skeleton instead of ~80, and every bone breathes in sync, which reads as
+   *   calm instead of as static. It also waits 120ms before appearing, so a
+   *   fast load never flashes a skeleton for a single frame. The pulse's
+   *   0%/100% keyframes are left unset on purpose: they fall back to the
+   *   intro's filled value (1), so the two animations hand over seamlessly.
+   *
+   * · `.krov-enter` ends on `transform: none`, not `translateY(0)`. A
+   *   non-`none` transform left filled on an element makes it the containing
+   *   block for every `position: fixed` descendant — the modals and sticky bars
+   *   inside these pages would stop being fixed to the viewport.
+   *
+   * · `.krov-enter-stagger` staggers its direct children with nth-child delays,
+   *   capped at the 8th child. No per-item props, so it works inside Server
+   *   Components, and a 20-card grid finishes in the same ~560ms as an
+   *   8-card one instead of cascading for a full second. The selector is written
+   *   as `> :nth-child(n)` so its specificity (0,2,0) beats a child's own
+   *   single-class animation utility (ProductCard's `animate-fadeIn`) without
+   *   depending on source order.
+   *
+   * · Never apply `.krov-enter` to an ANCESTOR of a `backdrop-blur` surface. An
+   *   ancestor with opacity < 1 becomes the blur's backdrop root, so the glass
+   *   would blur nothing for 300ms and then pop. Animate the glass card itself.
+   */
+  @keyframes krovSkeletonIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes krovSkeletonPulse {
+    50% { opacity: 0.45; }
+  }
+  .krov-skeleton {
+    animation:
+      krovSkeletonIn 240ms ease-out 120ms both,
+      krovSkeletonPulse 1.8s ease-in-out 360ms infinite;
+  }
+
+  @keyframes krovEnter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .krov-enter,
+  .krov-enter-stagger > :nth-child(n) {
+    animation: krovEnter 420ms var(--ease-krov) both;
+  }
+  .krov-enter-stagger > :nth-child(2) { animation-delay: 40ms; }
+  .krov-enter-stagger > :nth-child(3) { animation-delay: 80ms; }
+  .krov-enter-stagger > :nth-child(4) { animation-delay: 120ms; }
+  .krov-enter-stagger > :nth-child(5) { animation-delay: 160ms; }
+  .krov-enter-stagger > :nth-child(6) { animation-delay: 200ms; }
+  .krov-enter-stagger > :nth-child(7) { animation-delay: 240ms; }
+  .krov-enter-stagger > :nth-child(n + 8) { animation-delay: 280ms; }
+
+  /* A progress bar filling from the left. The element is sized to its final
+     width and only its scale animates, so the fill never touches layout. */
+  @keyframes krovBarFill {
+    from { transform: scaleX(0); }
+    to   { transform: none; }
+  }
+  .krov-bar-fill {
+    transform-origin: left center;
+    animation: krovBarFill 800ms var(--ease-krov) 200ms both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .krov-bar-fill {
+      animation: none;
+    }
+    /* Content arrives in place; the skeleton holds still at a readable tone. */
+    .krov-enter,
+    .krov-enter-stagger > :nth-child(n) {
+      animation: none;
+    }
+    .krov-skeleton {
+      animation: none;
+      opacity: 0.7;
+    }
+  }
+
+  /*
    * ── Floating cart ⇄ StickyPurchaseBar coordination ──────────────────────────
    *
    * The mobile floating cart (Navbar) sits bottom-right; the product page's

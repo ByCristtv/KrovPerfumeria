@@ -16,10 +16,16 @@ import type { ReactNode } from "react";
  * three slightly different paddings and three slightly different buttons.
  */
 
-/** The bordered, divided list every social section renders into. */
+/**
+ * The bordered, divided list every social section renders into.
+ *
+ * Rows rise in with `krov-enter-stagger` when they mount (data arriving, a tab
+ * switch, a new search result). Rows already on screen keep their key and are
+ * not re-animated by a refetch.
+ */
 export function SocialList({ children }: { children: ReactNode }) {
   return (
-    <ul className="divide-y divide-krov-smoke/70 border-y border-krov-smoke/70">
+    <ul className="krov-enter-stagger divide-y divide-krov-smoke/70 border-y border-krov-smoke/70">
       {children}
     </ul>
   );
@@ -248,21 +254,24 @@ export function SocialPanelLink({
   );
 }
 
-/** Row placeholders, sized to the real rows so a list does not jump on load. */
+/**
+ * Row placeholders, sized to the real rows so a list does not jump on load.
+ * The region pulses as one animation (`krov-skeleton`); the bones are static.
+ */
 export function SocialListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div
       aria-hidden
-      className="divide-y divide-krov-smoke/70 border-y border-krov-smoke/70"
+      className="krov-skeleton divide-y divide-krov-smoke/70 border-y border-krov-smoke/70"
     >
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 py-4 sm:gap-4 sm:py-5">
-          <div className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-white/5" />
+          <div className="h-11 w-11 shrink-0 rounded-full bg-white/[0.06]" />
           <div className="min-w-0 flex-1">
-            <div className="h-4 w-32 max-w-full animate-pulse rounded bg-white/10" />
-            <div className="mt-2 h-2.5 w-20 animate-pulse rounded bg-white/5" />
+            <div className="h-4 w-32 max-w-full bg-white/10" />
+            <div className="mt-2 h-2.5 w-20 bg-white/[0.06]" />
           </div>
-          <div className="h-8 w-24 shrink-0 animate-pulse rounded bg-white/5" />
+          <div className="h-8 w-24 shrink-0 bg-white/[0.06]" />
         </div>
       ))}
     </div>

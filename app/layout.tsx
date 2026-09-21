@@ -61,8 +61,8 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.name,
   icons: {
-    icon: "/Logo.png", // Busca la imagen dentro de la carpeta public/
-    shortcut: "/Logo.png",
+    icon: "/KrovIcon.png", // Busca la imagen dentro de la carpeta public/
+    shortcut: "/KrovIcon.png",
   },
 
   // Home page is the canonical root; every other route sets its own.

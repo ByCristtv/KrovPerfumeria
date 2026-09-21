@@ -207,7 +207,7 @@ describe("ReceivedRequestsPanel", () => {
 
     it("shows a skeleton while loading", () => {
       const { container } = setup({ isLoading: true });
-      expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
+      expect(container.querySelector(".krov-skeleton")).toBeInTheDocument();
     });
 
     it("shows a retry-able error state (CASE 12)", () => {

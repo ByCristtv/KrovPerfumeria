@@ -1,7 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   Package,
   BarChart3,
@@ -94,18 +91,13 @@ export default function AdminPage() {
         description="Gestiona tu tienda de perfumes desde un solo lugar."
       />
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {SECTIONS.map(({ href, title, description, Icon }, i) => (
-          <motion.div
-            key={href}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: i * 0.08,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-          >
+      {/* CSS stagger on the grid (see globals.css) instead of eight Framer
+          nodes: this page is a Server Component and ships no animation JS.
+          The stagger animates the Link wrapper; the hover lift lives on the
+          inner <article>, so the two transforms never fight. */}
+      <div className="krov-enter-stagger grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {SECTIONS.map(({ href, title, description, Icon }) => (
+          <div key={href}>
             <Link href={href} className="group block h-full">
               <article className="flex h-full flex-col rounded-none border border-krov-smoke bg-krov-graphite p-7 shadow-[0_18px_64px_rgba(0,0,0,0.35)] transition-all duration-300 hover:-translate-y-1 hover:border-krov-blood/60 hover:shadow-[0_0_28px_rgba(255,11,85,0.12)]">
                 <span className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-none border border-krov-smoke bg-krov-blood/[0.06] text-krov-rose transition-colors duration-300 group-hover:border-krov-blood/60 group-hover:bg-krov-blood/10">
@@ -124,7 +116,7 @@ export default function AdminPage() {
                 </p>
               </article>
             </Link>
-          </motion.div>
+          </div>
         ))}
       </div>
     </AdminContainer>

@@ -13,6 +13,9 @@ interface DistrictSelectProps {
   name?: string;
   id?: string;
   disabled?: boolean;
+  /** Forwarded so a host form can attach its own field-level error. */
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }
 
 /**
@@ -51,6 +54,8 @@ export default function DistrictSelect({
   name,
   id,
   disabled,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: DistrictSelectProps) {
   const districts = getDistricts(cantonCode);
 
@@ -70,6 +75,8 @@ export default function DistrictSelect({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled || !cantonCode || districts.length === 0}
       className={className}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
       autoComplete="address-level3"
     >
       <option value="">

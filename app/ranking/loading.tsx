@@ -1,5 +1,6 @@
 import { RankingBoardSkeleton } from "@/components/ranking/RankingBoard";
 import { RewardsRoadmapSkeleton } from "@/components/ranking/RewardsRoadmap";
+import { LoadingAnnouncement } from "@/components/ui/Skeleton";
 import { RANKING_TOP_COUNT } from "@/types/ranking";
 
 /**
@@ -18,6 +19,7 @@ export default function RankingLoading() {
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-gradient-to-b from-krov-ink via-krov-void to-krov-void"
       />
+      <LoadingAnnouncement label="Cargando el ranking…" />
 
       <div className="relative mx-auto max-w-3xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
         <header className="text-center">
@@ -40,6 +42,12 @@ export default function RankingLoading() {
         <div className="mt-16 border-t border-krov-smoke/70 pt-14 sm:mt-20 sm:pt-16">
           <RewardsRoadmapSkeleton />
         </div>
+
+        {/* Static footnote — real copy, same reason as the header. */}
+        <p className="mt-8 text-center text-xs leading-relaxed text-krov-dust">
+          Solo aparecen quienes lo activaron desde su perfil.{" "}
+          <span className="text-krov-rose">Configura tu participación</span>.
+        </p>
       </div>
     </div>
   );

@@ -3,6 +3,11 @@ import type { Tables } from "@/types/database";
 
 export type ProfileRow = Tables<"profiles">;
 export type AddressRow = Tables<"addresses">;
+export type AccountOrderItem = Pick<
+  Tables<"order_items">,
+  "id" | "product_name" | "brand_name" | "size_ml" | "quantity"
+>;
+
 export type AccountOrderRow = Pick<
   Tables<"orders">,
   | "id"
@@ -11,7 +16,10 @@ export type AccountOrderRow = Pick<
   | "order_status"
   | "payment_status"
   | "created_at"
->;
+> & {
+  /** Line snapshots taken at checkout, so a later product edit can't rewrite history. */
+  order_items: AccountOrderItem[];
+};
 
 export type WholesaleProfileRow = Tables<"wholesale_profiles">;
 
@@ -46,12 +54,22 @@ export async function getAccountData(userId: string): Promise<AccountData> {
   };
 }
 
+/**
+ * The signed-in customer's orders, newest first, each with its line items.
+ *
+ * One round trip: the items are embedded through the `order_items_order_id_fkey`
+ * relationship, and RLS ("Users can view own order items") scopes them to
+ * orders this user owns. The `user_id` filter is still stated explicitly so an
+ * admin, whom RLS lets read every order, sees only their own history here too.
+ */
 export async function getAccountOrders(
   userId: string
 ): Promise<AccountOrderRow[]> {
   const { data, error } = await supabase
     .from("orders")
-    .select("id, order_number, total, order_status, payment_status, created_at")
+    .select(
+      "id, order_number, total, order_status, payment_status, created_at, order_items ( id, product_name, brand_name, size_ml, quantity )"
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 

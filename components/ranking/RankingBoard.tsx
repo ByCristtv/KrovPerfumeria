@@ -4,10 +4,12 @@ import { RANKING_TOP_COUNT, type RankingEntry } from "@/types/ranking";
 /**
  * The Top 10 board.
  *
- * A Server Component with no interactivity and no animation: the list is static
- * content, so shipping a client bundle (or a motion timeline) for it would buy
- * nothing. The only visual hierarchy is the podium treatment on the first three
- * rows, expressed with the palette the rest of the storefront already uses.
+ * A Server Component with no interactivity: the list is static content, so
+ * shipping a client bundle (or a motion timeline) for it would buy nothing. The
+ * rows' entrance is CSS only (`krov-enter-stagger`): they rise top-down as the
+ * board replaces its skeleton, podium first. The only visual hierarchy is the
+ * podium treatment on the first three rows, expressed with the palette the rest
+ * of the storefront already uses.
  *
  * Rendered as an ordered list — the semantics of a leaderboard are literally
  * `<ol>`, and the position is carried by the markup rather than only by the
@@ -15,7 +17,7 @@ import { RANKING_TOP_COUNT, type RankingEntry } from "@/types/ranking";
  */
 export default function RankingBoard({ entries }: { entries: RankingEntry[] }) {
   return (
-    <ol className="divide-y divide-krov-smoke/70 border-y border-krov-smoke/70">
+    <ol className="krov-enter-stagger divide-y divide-krov-smoke/70 border-y border-krov-smoke/70">
       {entries.map((entry) => (
         <RankingRow key={entry.position} entry={entry} />
       ))}
@@ -115,11 +117,14 @@ export function RankingErrorState() {
   );
 }
 
-/** Row placeholders, sized to the real rows so the board doesn't jump on load. */
+/**
+ * Row placeholders, sized to the real rows so the board doesn't jump on load.
+ * The region pulses as one animation (`krov-skeleton`); the bones are static.
+ */
 export function RankingBoardSkeleton() {
   return (
     <div
-      className="divide-y divide-krov-smoke/70 border-y border-krov-smoke/70"
+      className="krov-skeleton divide-y divide-krov-smoke/70 border-y border-krov-smoke/70"
       aria-hidden
     >
       {Array.from({ length: RANKING_TOP_COUNT }).map((_, i) => (
@@ -127,12 +132,12 @@ export function RankingBoardSkeleton() {
           key={i}
           className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 px-1 py-4 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5 sm:px-2 sm:py-5"
         >
-          <div className="ml-auto h-6 w-5 animate-pulse rounded bg-white/5" />
+          <div className="ml-auto h-6 w-5 bg-white/[0.06]" />
           <div className="min-w-0">
-            <div className="h-4 w-32 max-w-full animate-pulse rounded bg-white/10" />
-            <div className="mt-2 h-2.5 w-16 animate-pulse rounded bg-white/5" />
+            <div className="h-4 w-32 max-w-full bg-white/10" />
+            <div className="mt-2 h-2.5 w-16 bg-white/[0.06]" />
           </div>
-          <div className="h-4 w-16 animate-pulse rounded bg-white/5" />
+          <div className="h-4 w-16 bg-white/[0.06]" />
         </div>
       ))}
     </div>
