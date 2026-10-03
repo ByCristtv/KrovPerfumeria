@@ -18,6 +18,13 @@ export interface RankingEntry {
   experiencePoints: number;
   /** Derived from `experiencePoints` via lib/rank.ts — never stored. */
   rank: UserRank;
+  /**
+   * Places gained (+) or lost (−) since the previous day, `0` for unchanged.
+   * Absent until the database keeps a daily snapshot to compare against — the
+   * board draws a movement marker only when this is a number, so it never
+   * claims "no change" about something it cannot know.
+   */
+  movement?: number | null;
 }
 
 /**

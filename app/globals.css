@@ -656,6 +656,173 @@ body > * {
   }
 
   /*
+   * ── Leaderboard: metal frames ───────────────────────────────────────────────
+   *
+   * Every leaderboard entry is framed in one of five metals. A metal is just four
+   * custom properties on an ancestor (`.krov-metal-*`); the frame, halo, sheen,
+   * avatar ring and embossed numeral below all read them, so a new tier is one
+   * rule and no component has to know a hex value.
+   *
+   * Motion budget: the frame shimmer is a `background-position` slide on a
+   * 1.5px ring and the halo/sheen are `opacity`/`transform` only. They are slow
+   * (5–12s) on purpose — this is a gleam, not a spinner — and all of them are
+   * switched off under `prefers-reduced-motion`, leaving the static metal.
+   */
+  .krov-metal-gold   { --m-hi: #fff1b8; --m-mid: #e0b24a; --m-lo: #7a5412; --m-glow: 224 178 74; }
+  .krov-metal-silver { --m-hi: #ffffff; --m-mid: #c5ccd6; --m-lo: #59616e; --m-glow: 197 204 214; }
+  .krov-metal-bronze { --m-hi: #ffcfa0; --m-mid: #c9814a; --m-lo: #6b3a18; --m-glow: 201 129 74; }
+  .krov-metal-steel  { --m-hi: #c3c9d6; --m-mid: #7d8393; --m-lo: #353843; --m-glow: 140 148 165; }
+  .krov-metal-rose   { --m-hi: #ffd9d2; --m-mid: #d9667a; --m-lo: #4a0518; --m-glow: 217 102 122; }
+
+  /* The ring: a metal gradient painted behind a mask that keeps only the border. */
+  .krov-frame {
+    position: relative;
+    isolation: isolate;
+  }
+  .krov-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    padding: var(--frame-w, 1.5px);
+    border-radius: inherit;
+    background-image: linear-gradient(
+      115deg,
+      var(--m-lo) 0%,
+      var(--m-mid) 18%,
+      var(--m-hi) 30%,
+      var(--m-mid) 42%,
+      var(--m-lo) 58%,
+      var(--m-mid) 78%,
+      var(--m-hi) 90%,
+      var(--m-lo) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+    animation: krovFrameShimmer var(--shimmer-dur, 8s) linear infinite;
+  }
+  @keyframes krovFrameShimmer {
+    to { background-position: 200% 0; }
+  }
+
+  /* Slow "glowing essence" behind a podium card. Sits under the content. */
+  .krov-halo {
+    position: absolute;
+    inset: -14% -12%;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(closest-side, rgb(var(--m-glow) / 0.5), transparent 75%);
+    pointer-events: none;
+    animation: krovHalo 4.8s ease-in-out infinite;
+  }
+  @keyframes krovHalo {
+    0%, 100% { opacity: 0.4; transform: scale(0.96); }
+    50%      { opacity: 1;   transform: scale(1.06); }
+  }
+
+  /* A diagonal glint that crosses the card, then rests. */
+  .krov-sheen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .krov-sheen::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: 0;
+    width: 45%;
+    background: linear-gradient(100deg, transparent, rgb(var(--m-glow) / 0.2), transparent);
+    transform: translateX(-130%) skewX(-18deg);
+    animation: krovSheen 7s ease-in-out infinite;
+  }
+  @keyframes krovSheen {
+    0%, 55% { transform: translateX(-130%) skewX(-18deg); }
+    100%    { transform: translateX(330%) skewX(-18deg); }
+  }
+
+  /* Card faces. Podium faces take a wash of their own metal; steel is brushed. */
+  .krov-metal-face {
+    background:
+      linear-gradient(180deg, rgb(var(--m-glow) / 0.14), transparent 60%),
+      linear-gradient(180deg, #1a1520, #0e0b12);
+  }
+  .krov-steel-face {
+    background:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px),
+      linear-gradient(165deg, #2b2631 0%, #17131c 48%, #231e2a 100%);
+  }
+
+  /* Embossed numeral: metal-filled glyph with a lit top edge and a dark drop. */
+  .krov-emboss {
+    background-image: linear-gradient(180deg, var(--m-hi) 0%, var(--m-mid) 48%, var(--m-lo) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.28)) drop-shadow(0 2px 3px rgb(0 0 0 / 0.8));
+  }
+
+  /* Avatar ring in the entry's metal. */
+  .krov-avatar-ring {
+    border-radius: 9999px;
+    padding: 2px;
+    background: conic-gradient(
+      from 210deg,
+      var(--m-lo),
+      var(--m-hi),
+      var(--m-mid),
+      var(--m-lo),
+      var(--m-hi),
+      var(--m-lo)
+    );
+    box-shadow: 0 0 14px -2px rgb(var(--m-glow) / 0.45);
+  }
+
+  /*
+   * Segmented XP meter: ten cells, each 10% of the way to the next rank. The
+   * mask cuts the gaps; the glow is a separate un-masked, blurred copy of the
+   * fill underneath, because a mask would clip a box-shadow away.
+   */
+  .krov-xp-segments {
+    -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(10% - 2px), transparent calc(10% - 2px) 10%);
+    mask-image: repeating-linear-gradient(90deg, #000 0 calc(10% - 2px), transparent calc(10% - 2px) 10%);
+  }
+  .krov-xp-fill {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-krov-wine),
+      var(--color-krov-crimson) 55%,
+      var(--color-krov-blood)
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .krov-frame::before,
+    .krov-halo,
+    .krov-sheen::after {
+      animation: none;
+    }
+    .krov-halo {
+      opacity: 0.7;
+    }
+    .krov-sheen {
+      display: none;
+    }
+  }
+
+  /*
    * ── Floating cart ⇄ StickyPurchaseBar coordination ──────────────────────────
    *
    * The mobile floating cart (Navbar) sits bottom-right; the product page's

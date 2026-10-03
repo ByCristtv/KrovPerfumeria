@@ -30,7 +30,7 @@ export default async function RankingPage() {
     <div className="relative min-h-screen bg-krov-void">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-krov-ink via-krov-void to-krov-void"
+        className="pointer-events-none absolute inset-0 bg-linear-to-b from-krov-ink via-krov-void to-krov-void"
       />
 
       <div className="relative mx-auto max-w-3xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
@@ -40,8 +40,7 @@ export default async function RankingPage() {
             Top {RANKING_TOP_COUNT}
           </h1>
           <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-krov-ash">
-            Las {RANKING_TOP_COUNT} personas con más experiencia. Se gana XP con
-            cada pedido recibido, y el rango sale de ese total.
+            Los {RANKING_TOP_COUNT} usuarios mas activos de KROV.
           </p>
         </header>
 
