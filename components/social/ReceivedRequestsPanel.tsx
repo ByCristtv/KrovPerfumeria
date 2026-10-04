@@ -1,15 +1,18 @@
 "use client";
 
+import { Clock, Inbox } from "lucide-react";
 import SocialAvatar from "@/components/social/SocialAvatar";
 import {
   SocialActionButton,
+  SocialCard,
   SocialErrorState,
   SocialList,
   SocialListSkeleton,
   SocialPanelAction,
-  SocialRow,
-  SocialRowMeta,
+  SocialRankPill,
+  SocialRingAvatar,
   SocialRowTitle,
+  SocialSnippet,
   SocialStatePanel,
 } from "@/components/social/socialUi";
 import {
@@ -21,17 +24,15 @@ import {
   useReceivedRequests,
   useRejectFriendRequest,
 } from "@/hooks/useFriendRequests";
-import { getRankFromXP } from "@/lib/rank";
-import { socialDisplayName } from "@/lib/social/display";
-import { formatXp } from "@/lib/format";
+import { formatRequestAge, socialDisplayName } from "@/lib/social/display";
 import type { ReceivedFriendRequest } from "@/types/social";
 
 /**
  * «Solicitudes» — requests waiting for this user's decision.
  *
- * Shows avatar, username and the rank the sender's XP implies. Rank is computed
- * here with `getRankFromXP`, the SAME function the leaderboard and the profile
- * use; there is no second ladder and no stored rank. Nothing private appears —
+ * Shows avatar, username and the rank the sender's XP implies (the pill and the
+ * ring colour both come from `getRankFromXP`, the SAME function the leaderboard
+ * and the profile use; there is no second ladder and no stored rank). Nothing private appears —
  * `get_received_friend_requests` returns no name, phone, email or order data.
  *
  * Accept and reject are one mutation instance each for the whole list, with the
@@ -69,7 +70,10 @@ export default function ReceivedRequestsPanel({
 
   if (requests.length === 0) {
     return (
-      <SocialStatePanel title="No tienes solicitudes pendientes">
+      <SocialStatePanel
+        title="No tienes solicitudes pendientes"
+        icon={<Inbox size={22} strokeWidth={1.5} />}
+      >
         <p>
           Cuando alguien te envíe una solicitud de amistad, aparecerá aquí para
           que la aceptes o la rechaces.
@@ -121,19 +125,24 @@ function RequestRow({
   // and it must stay answerable. `get_received_friend_requests` returns no
   // full name, so there is nothing to fall back to but the anonymous label.
   const name = socialDisplayName(request.username);
+  const age = formatRequestAge(request.requestedAt);
 
   return (
-    <SocialRow
+    <SocialCard
       avatar={
-        <SocialAvatar
-          username={request.username}
-          avatarUrl={request.avatarUrl}
-        />
+        <SocialRingAvatar xp={request.experiencePoints}>
+          <SocialAvatar
+            username={request.username}
+            avatarUrl={request.avatarUrl}
+            size={52}
+          />
+        </SocialRingAvatar>
       }
       actions={
         <>
           <SocialActionButton
             label="Aceptar"
+            tone="solid"
             pendingLabel="…"
             pending={isAccepting}
             disabled={busy}
@@ -153,10 +162,14 @@ function RequestRow({
       }
     >
       <SocialRowTitle>{name}</SocialRowTitle>
-      <SocialRowMeta>
-        {getRankFromXP(request.experiencePoints)} ·{" "}
-        {formatXp(request.experiencePoints)} XP
-      </SocialRowMeta>
-    </SocialRow>
+      <div className="mt-2.5">
+        <SocialRankPill xp={request.experiencePoints} />
+      </div>
+      {age && (
+        <SocialSnippet icon={<Clock size={13} strokeWidth={1.7} />}>
+          Quiere ser tu amigo · {age}
+        </SocialSnippet>
+      )}
+    </SocialCard>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { useUserSearch } from "@/hooks/useUserSearch";
 import {
   useCancelFriendRequest,
@@ -61,6 +61,10 @@ export default function UserSearchPanel({
 
   const sentRequests = useSentRequests();
 
+  // True from the first keystroke until results for it land: the debounce
+  // window (`isPending`) plus the request itself (`isLoading`).
+  const searching = !isIdle && (isPending || isLoading);
+
   // Feedback is identical for every social mutation: a brief toast on success,
   // a readable Spanish alert on failure. The cache invalidation that actually
   // flips «Agregar» to «Pendiente» happens inside useSocialMutation.
@@ -79,15 +83,26 @@ export default function UserSearchPanel({
       {/* No <form>: there is no submit step. Results follow the debounced value,
           so an Enter key has nothing left to do — and a form would reload the
           page on Enter unless its default were suppressed. */}
-      <div className="relative">
+      <div className="relative mx-auto max-w-xl">
         <label htmlFor={inputId} className="sr-only">
           Buscar personas por nombre de usuario
         </label>
-        <Search
-          size={18}
-          aria-hidden
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-krov-dust"
-        />
+        {/* The icon doubles as the "working" indicator: it becomes a spinner
+            while the debounce settles or the query runs, so typing always has
+            visible feedback even before any result changes. */}
+        {searching ? (
+          <Loader2
+            size={18}
+            aria-hidden
+            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 animate-spin text-krov-rose motion-reduce:animate-none"
+          />
+        ) : (
+          <Search
+            size={18}
+            aria-hidden
+            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-krov-rose/80"
+          />
+        )}
         <input
           id={inputId}
           type="search"
@@ -99,21 +114,21 @@ export default function UserSearchPanel({
           spellCheck={false}
           maxLength={USERNAME_MAX_LENGTH}
           aria-describedby={hintId}
-          className="w-full border border-krov-smoke bg-krov-coal py-3.5 pl-12 pr-11 text-sm text-krov-bone outline-none transition-colors placeholder:text-krov-dust/70 focus:border-krov-blood focus:ring-1 focus:ring-krov-blood/40 [&::-webkit-search-cancel-button]:appearance-none"
+          className="w-full rounded-full border border-krov-smoke bg-white/[0.04] py-4 pl-13 pr-12 text-base text-krov-bone shadow-[0_8px_30px_rgba(0,0,0,0.35)] outline-none backdrop-blur-sm transition-[border-color,box-shadow] duration-300 placeholder:text-krov-dust/70 focus:border-krov-blood/70 focus:shadow-[0_0_0_1px_rgba(255,11,85,0.35),0_0_36px_-6px_rgba(255,11,85,0.5)] [&::-webkit-search-cancel-button]:appearance-none sm:text-sm"
         />
         {term && (
           <button
             type="button"
             onClick={() => setTerm("")}
             aria-label="Limpiar búsqueda"
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-krov-dust transition-colors hover:text-krov-bone"
+            className="absolute right-2.5 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-krov-dust transition-colors hover:bg-white/[0.06] hover:text-krov-bone"
           >
             <X size={16} aria-hidden />
           </button>
         )}
       </div>
 
-      <p id={hintId} className="mt-2.5 text-xs text-krov-dust">
+      <p id={hintId} className="mt-3 text-center text-xs text-krov-dust">
         Mínimo {SOCIAL_SEARCH_MIN_LENGTH} caracteres. Solo se muestran las
         cuentas con perfil público.
       </p>

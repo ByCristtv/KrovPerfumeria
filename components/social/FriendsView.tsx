@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthUser } from "@/hooks/useAuthUser";
@@ -9,6 +8,7 @@ import FriendsPortalTabs, {
 } from "@/components/social/FriendsPortalTabs";
 import FriendsList from "@/components/social/FriendsList";
 import ReceivedRequestsPanel from "@/components/social/ReceivedRequestsPanel";
+import ProfileVisibilityCard from "@/components/social/ProfileVisibilityCard";
 import SearchSection from "@/components/social/SearchSection";
 import { SocialListSkeleton } from "@/components/social/socialUi";
 import { useReceivedRequests } from "@/hooks/useFriendRequests";
@@ -60,7 +60,7 @@ export default function FriendsView() {
         className="krov-aura-wine pointer-events-none absolute -top-32 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 opacity-60"
       />
 
-      <div className="relative mx-auto max-w-2xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
+      <div className="relative mx-auto max-w-6xl px-4 pt-28 pb-24 sm:px-8 md:pt-36">
         {/* Rendered identically by the skeleton, so it does not animate: only
             what was a placeholder a moment ago rises in. */}
         <FriendsHeader />
@@ -99,13 +99,9 @@ export default function FriendsView() {
           )}
         </div>
 
-        <p className="mt-10 text-center text-xs leading-relaxed text-krov-dust">
-          ¿No apareces en las búsquedas de tus amigos?{" "}
-          <Link href="/profile" className="krov-underline text-krov-rose">
-            Haz público tu perfil
-          </Link>
-          .
-        </p>
+        {/* Buscar already carries its own privacy gate (SearchSection), so the
+            card would only repeat it there. */}
+        {section !== "search" && <ProfileVisibilityCard />}
       </div>
     </div>
   );
@@ -115,13 +111,12 @@ export default function FriendsView() {
 function FriendsHeader() {
   return (
     <header className="text-center">
-      <p className="krov-eyebrow mb-5">Amigos</p>
+      <p className="krov-eyebrow mb-5">Social</p>
       <h1 className="krov-display text-4xl text-krov-bone md:text-6xl">
-        Tu círculo
+        Mis Amigos
       </h1>
       <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-krov-ash">
-        Encuentra a otras personas por su nombre de usuario, responde tus
-        solicitudes y administra tu lista de amigos.
+        Busca, agrega y administra tus amigos en KROV
       </p>
     </header>
   );
@@ -147,7 +142,7 @@ function FriendsSkeleton() {
         Cargando…
       </p>
 
-      <div className="relative mx-auto max-w-2xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
+      <div className="relative mx-auto max-w-6xl px-4 pt-28 pb-24 sm:px-8 md:pt-36">
         <FriendsHeader />
 
         {/* FriendsPortalTabs: p-1 + border + a py-2.5 label whose line is 15px

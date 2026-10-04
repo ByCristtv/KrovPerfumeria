@@ -303,8 +303,9 @@ describe("friendship lifecycle", () => {
       expect(backend.friendships).toHaveLength(1);
 
       // The friends list now has them.
+      // A friend card leads with the full name; the username is its @handle.
       await goTo(/amigos/i);
-      expect(await screen.findByText("aurora")).toBeInTheDocument();
+      expect(await screen.findByText("@aurora")).toBeInTheDocument();
 
       // And so does search. Scoped to the result row: the portal's own
       // "Amigos" tab label would otherwise match too.
@@ -356,10 +357,14 @@ describe("friendship lifecycle", () => {
         await screen.findByRole("button", { name: /aceptar la solicitud/i })
       );
       await goTo(/amigos/i);
-      await screen.findByText("aurora");
+      await screen.findByText("@aurora");
 
+      // Removal sits behind the card's "•••" menu: open it, then choose.
       await user().click(
-        screen.getByRole("button", { name: /eliminar a aurora/i })
+        screen.getByRole("button", { name: /más opciones de nombre real/i })
+      );
+      await user().click(
+        await screen.findByRole("menuitem", { name: /eliminar amigo/i })
       );
       const dialog = await screen.findByRole("dialog");
       await waitFor(() => expect(dialog).toHaveFocus());

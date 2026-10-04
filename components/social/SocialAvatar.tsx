@@ -1,42 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { isRenderableAvatar } from "@/lib/avatar/renderable";
 import { socialInitial } from "@/lib/social/display";
-
-/**
- * Hostnames `next/image` is configured to optimize — kept in lockstep with
- * `images.remotePatterns` in next.config.ts.
- *
- * It has to be checked here because `avatar_url` is the one image source in the
- * app that comes from ANOTHER user's row rather than from our own catalog.
- * next/image refuses a hostname that is not in `remotePatterns`, and the refusal
- * surfaces as a broken/failed image on a page full of strangers — so an avatar
- * from a provider we have not configured degrades to the monogram instead.
- *
- * Today the only producers are Google OAuth (`lh3.googleusercontent.com`) and
- * Supabase Storage; everyone who signed up with an email has no avatar at all.
- */
-const OPTIMIZABLE_AVATAR_HOSTS = [
-  "lh3.googleusercontent.com",
-  "xabzbvanmqeplenfoozx.supabase.co",
-] as const;
-
-function isRenderableAvatar(url: string | null): url is string {
-  if (!url) return false;
-  try {
-    const { protocol, hostname } = new URL(url);
-    return (
-      protocol === "https:" &&
-      OPTIMIZABLE_AVATAR_HOSTS.some(
-        (host) => hostname === host || hostname.endsWith(`.${host}`)
-      )
-    );
-  } catch {
-    // Not an absolute URL — including the empty string the signup trigger
-    // writes for email/password accounts.
-    return false;
-  }
-}
 
 /**
  * A person's picture, anywhere in the social module.

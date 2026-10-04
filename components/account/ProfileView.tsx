@@ -133,7 +133,12 @@ export default function ProfileView() {
           <div className="krov-enter-stagger space-y-5">
             <IdentitySection
               fullName={fullName}
-              avatarUrl={user.user_metadata?.avatar_url ?? null}
+              // The uploaded photo (profiles.avatar_url) wins; the OAuth
+              // picture is only the default for accounts that never set one.
+              // `||`, not `??`: the signup trigger stores '' for email accounts.
+              avatarUrl={
+                profile?.avatar_url || user.user_metadata?.avatar_url || null
+              }
               username={profile?.username ?? null}
               showInRanking={profile?.show_in_ranking ?? false}
               isProfilePublic={profile?.is_profile_public ?? false}

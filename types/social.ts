@@ -185,6 +185,14 @@ export interface Friend {
   avatarUrl: string | null;
   experiencePoints: number;
   friendsSince: string;
+  /**
+   * The product from this friend's most recent COMPLETED order, or null. Same
+   * completion rule and same friendship gate as `get_friend_purchased_products`,
+   * so it reveals nothing a friend could not already see on their profile — and
+   * carries no date. Also null when the `get_friends` migration that adds it
+   * (20261003000300) has not been applied yet.
+   */
+  lastPurchase: { productName: string; brandName: string | null } | null;
 }
 
 /**

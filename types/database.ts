@@ -83,6 +83,24 @@ export type Database = {
           },
         ]
       }
+      avatar_upload_attempts: {
+        Row: {
+          created_at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: []
+      }
       brands: {
         Row: {
           created_at: string
@@ -1071,6 +1089,20 @@ export type Database = {
     }
     Functions: {
       accept_friend_request: { Args: { p_request_id: string }; Returns: string }
+      admin_find_customer_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          address_canton: string
+          address_district: string
+          address_exact: string
+          address_province: string
+          address_reference: string
+          email: string
+          full_name: string
+          phone: string
+          user_id: string
+        }[]
+      }
       admin_list_product_variants: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {
@@ -1118,6 +1150,20 @@ export type Database = {
           variant_id: string
         }[]
       }
+      admin_search_customers: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          address_canton: string
+          address_district: string
+          address_exact: string
+          address_province: string
+          address_reference: string
+          email: string
+          full_name: string
+          phone: string
+          user_id: string
+        }[]
+      }
       advance_order_status: {
         Args: { p_new_status: string; p_order_id: string }
         Returns: Json
@@ -1155,6 +1201,13 @@ export type Database = {
           total_units: number
         }[]
       }
+      backfill_admin_order_links: {
+        Args: never
+        Returns: {
+          orders_linked: number
+          user_id: string
+        }[]
+      }
       backfill_guest_order_xp: {
         Args: never
         Returns: {
@@ -1169,6 +1222,13 @@ export type Database = {
       cancel_friend_request: {
         Args: { p_request_id: string }
         Returns: undefined
+      }
+      claim_avatar_upload_slot: {
+        Args: never
+        Returns: {
+          allowed: boolean
+          retry_after_seconds: number
+        }[]
       }
       claim_guest_orders: {
         Args: { p_email: string; p_user_id: string }
@@ -1250,6 +1310,8 @@ export type Database = {
           friends_since: string
           friendship_id: string
           full_name: string
+          last_purchased_brand: string
+          last_purchased_product: string
           username: string
         }[]
       }

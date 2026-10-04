@@ -34,6 +34,12 @@ export async function getFriends(): Promise<Friend[]> {
     avatarUrl: row.avatar_url?.trim() ? row.avatar_url : null,
     experiencePoints: row.experience_points ?? 0,
     friendsSince: row.friends_since,
+    lastPurchase: row.last_purchased_product?.trim()
+      ? {
+          productName: row.last_purchased_product.trim(),
+          brandName: row.last_purchased_brand?.trim() || null,
+        }
+      : null,
   }));
 }
 

@@ -3,6 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useId, useState, type FormEvent } from "react";
+import { Camera, Loader2 } from "lucide-react";
+import { useAvatarUpload } from "@/hooks/useAvatarUpload";
+import { AVATAR_ACCEPTED_MIME_TYPES } from "@/lib/avatar/constants";
+import { isRenderableAvatar } from "@/lib/avatar/renderable";
 import {
   Badge,
   Card,
@@ -23,9 +27,12 @@ import {
 } from "@/schemas/ranking";
 import { updateRankingSettingsAction } from "@/app/profile/actions";
 
+const ANONYMOUS_AVATAR = "/User/UserAnonimous.avif";
+
 interface IdentitySectionProps {
   /** From the auth account (Google / sign-up). Shown, never edited here. */
   fullName: string;
+  /** `profiles.avatar_url`, falling back to the OAuth picture. Changed via the camera button. */
   avatarUrl: string | null;
   username: string | null;
   showInRanking: boolean;
@@ -87,6 +94,14 @@ export default function IdentitySection({
   } = useInlineEdit();
   const [usernameValue, setUsernameValue] = useState("");
   const [visible, setVisible] = useState(false);
+  const {
+    inputRef: avatarInputRef,
+    open: openAvatarPicker,
+    onChange: onAvatarChange,
+    uploading: uploadingAvatar,
+    error: avatarError,
+    previewUrl,
+  } = useAvatarUpload({ currentUrl: avatarUrl, onUploaded: onSaved });
 
   // Empty is a legitimate value ("I have no public name"), so it is not an error
   // state; it just can't support the switch. Anything non-empty is held to the
@@ -148,9 +163,46 @@ export default function IdentitySection({
           <Image
             width={64}
             height={64}
-            src={avatarUrl ?? "/User/UserAnonimous.avif"}
+            src={
+              previewUrl ??
+              (isRenderableAvatar(avatarUrl) ? avatarUrl : ANONYMOUS_AVATAR)
+            }
             alt=""
             className="relative h-16 w-16 rounded-full object-cover"
+          />
+
+          {uploadingAvatar && (
+            <span
+              aria-hidden
+              className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60"
+            >
+              <Loader2 size={22} className="animate-spin text-white motion-reduce:animate-none" />
+            </span>
+          )}
+
+          {/* Corner badge rather than a whole-avatar overlay: the picture stays
+              fully visible, and the control keeps its own focus ring. */}
+          <button
+            type="button"
+            onClick={openAvatarPicker}
+            disabled={uploadingAvatar}
+            aria-label="Cambiar foto de perfil"
+            className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border border-white/20 bg-krov-blood text-white shadow transition-colors duration-200 hover:bg-krov-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-krov-rose focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Camera size={14} aria-hidden />
+          </button>
+
+          {/* Hidden picker, opened by the button above. `accept` only filters
+              the OS dialog; the real checks run in validateAvatarFile and,
+              authoritatively, on the server. */}
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept={AVATAR_ACCEPTED_MIME_TYPES.join(",")}
+            onChange={onAvatarChange}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden
           />
         </div>
 
@@ -167,6 +219,17 @@ export default function IdentitySection({
           )}
         </dl>
       </div>
+
+      {/* Live regions live outside the conditional parts so a screen reader
+          hears the state change instead of a node appearing already-filled. */}
+      <p role="status" className="sr-only">
+        {uploadingAvatar ? "Subiendo tu foto…" : ""}
+      </p>
+      {avatarError && (
+        <p role="alert" className="mt-3 text-xs text-red-400">
+          {avatarError}
+        </p>
+      )}
 
       {editing ? (
         <form

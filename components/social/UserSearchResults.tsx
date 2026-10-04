@@ -2,13 +2,16 @@
 
 import SocialAvatar from "@/components/social/SocialAvatar";
 import RelationshipAction from "@/components/social/RelationshipAction";
+import { Search, SearchX } from "lucide-react";
 import {
+  SocialCard,
+  SocialHandle,
   SocialList,
-  SocialRow,
+  SocialListSkeleton,
+  SocialPanelAction,
+  SocialRingAvatar,
   SocialRowTitle,
   SocialStatePanel,
-  SocialPanelAction,
-  SocialListSkeleton,
 } from "@/components/social/socialUi";
 import { SOCIAL_SEARCH_MIN_LENGTH, type SocialSearchUser } from "@/types/social";
 
@@ -51,13 +54,16 @@ export default function UserSearchResults({
         const requestId = sentRequestsByUserId.get(user.userId);
 
         return (
-          <SocialRow
+          <SocialCard
             key={user.userId}
             avatar={
-              <SocialAvatar
-                username={user.username}
-                avatarUrl={user.avatarUrl}
-              />
+              <SocialRingAvatar>
+                <SocialAvatar
+                  username={user.username}
+                  avatarUrl={user.avatarUrl}
+                  size={52}
+                />
+              </SocialRingAvatar>
             }
             actions={
               <RelationshipAction
@@ -73,7 +79,8 @@ export default function UserSearchResults({
             }
           >
             <SocialRowTitle>{user.username}</SocialRowTitle>
-          </SocialRow>
+            <SocialHandle>Perfil público</SocialHandle>
+          </SocialCard>
         );
       })}
     </SocialList>
@@ -83,7 +90,10 @@ export default function UserSearchResults({
 /** Nothing typed yet — the state the section opens in. */
 export function UserSearchIdleState() {
   return (
-    <SocialStatePanel title="Busca a tus amigos por su nombre de usuario">
+    <SocialStatePanel
+      title="Busca a tus amigos por su nombre de usuario"
+      icon={<Search size={22} strokeWidth={1.5} />}
+    >
       Escribe al menos {SOCIAL_SEARCH_MIN_LENGTH} caracteres. Solo aparecen las
       personas que activaron su perfil público desde su cuenta.
     </SocialStatePanel>
@@ -93,7 +103,10 @@ export function UserSearchIdleState() {
 /** The search ran and matched nobody. */
 export function UserSearchEmptyState({ query }: { query: string }) {
   return (
-    <SocialStatePanel title={`Nadie coincide con «${query}»`}>
+    <SocialStatePanel
+      title={`Nadie coincide con «${query}»`}
+      icon={<SearchX size={22} strokeWidth={1.5} />}
+    >
       Revisa cómo se escribe, o pídele a esa persona que active su perfil
       público desde su cuenta para poder encontrarla.
     </SocialStatePanel>

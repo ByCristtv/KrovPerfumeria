@@ -41,8 +41,39 @@ describe("friends data access", () => {
           avatarUrl: "https://lh3.googleusercontent.com/a/x",
           experiencePoints: 5200,
           friendsSince: "2026-09-19T10:00:00Z",
+          lastPurchase: null,
         },
       ]);
+    });
+
+    it("maps the last purchase when the RPC returns one", async () => {
+      rpcMock.mockResolvedValue({
+        data: [row({ last_purchased_product: " Eros ", last_purchased_brand: "Versace" })],
+        error: null,
+      });
+
+      const [friend] = await getFriends();
+      expect(friend.lastPurchase).toEqual({ productName: "Eros", brandName: "Versace" });
+    });
+
+    it("keeps the product but drops a blank brand", async () => {
+      rpcMock.mockResolvedValue({
+        data: [row({ last_purchased_product: "Eros", last_purchased_brand: "  " })],
+        error: null,
+      });
+
+      const [friend] = await getFriends();
+      expect(friend.lastPurchase).toEqual({ productName: "Eros", brandName: null });
+    });
+
+    it("treats no purchase — or a database without the migration — as null", async () => {
+      rpcMock.mockResolvedValue({
+        data: [row({ last_purchased_product: null }), row({ friendship_id: "f2" })],
+        error: null,
+      });
+
+      const friends = await getFriends();
+      expect(friends.map((f) => f.lastPurchase)).toEqual([null, null]);
     });
 
     it("exposes no private contact or order data", async () => {
@@ -58,6 +89,7 @@ describe("friends data access", () => {
         "friendsSince",
         "friendshipId",
         "fullName",
+        "lastPurchase",
         "userId",
         "username",
       ]);

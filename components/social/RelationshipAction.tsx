@@ -59,6 +59,7 @@ export default function RelationshipAction({
     return (
       <SocialActionButton
         label="Agregar"
+        tone="solid"
         pendingLabel="Enviando…"
         pending={isSending}
         onClick={onAdd}

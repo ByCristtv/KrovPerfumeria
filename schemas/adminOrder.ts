@@ -68,19 +68,31 @@ const optionalEmailSchema = z
 // Payload
 // ─────────────────────────────────────────────────────────────────────────────
 
-const customerSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, { message: "El nombre del cliente es obligatorio." })
-    .max(100, { message: "El nombre del cliente es demasiado largo." }),
-  phone: z
-    .string()
-    .trim()
-    .min(8, { message: "Ingresa un teléfono válido (mín. 8 dígitos)." })
-    .max(20, { message: "El teléfono es demasiado largo." }),
-  email: optionalEmailSchema,
-});
+const customerSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, { message: "El nombre del cliente es obligatorio." })
+      .max(100, { message: "El nombre del cliente es demasiado largo." }),
+    phone: z
+      .string()
+      .trim()
+      .min(8, { message: "Ingresa un teléfono válido (mín. 8 dígitos)." })
+      .max(20, { message: "El teléfono es demasiado largo." }),
+    email: optionalEmailSchema,
+    /** Registered account that should own the order. The RPC verifies it exists. */
+    user_id: z
+      .string()
+      .uuid({ message: "La cuenta del cliente no es válida." })
+      .optional(),
+    /** `false` = the admin declined the account link; see AdminOrderCustomerInput. */
+    link_account: z.boolean().optional(),
+  })
+  .refine((c) => !(c.user_id && c.link_account === false), {
+    message: "No puedes vincular y rechazar la cuenta del cliente a la vez.",
+    path: ["link_account"],
+  });
 
 const optionalText = (max: number, message: string) =>
   z

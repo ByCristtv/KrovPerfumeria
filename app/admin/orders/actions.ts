@@ -201,6 +201,7 @@ export async function createAdminOrderAction(
     ok: true,
     message:
       "Pedido creado. Pendiente de pago." +
+      (outcome.data.user_id ? " Vinculado a la cuenta del cliente." : "") +
       confirmationNote(outcome.notification),
     data: outcome.data,
   };
@@ -305,6 +306,13 @@ function rpcError<TData>(
       ok: false,
       message:
         "Uno de los productos ya no está disponible. Quítalo del pedido e inténtalo de nuevo.",
+    };
+  }
+  if (/customer\.user_id/i.test(msg)) {
+    return {
+      ok: false,
+      message:
+        "La cuenta del cliente seleccionada ya no existe. Quita el vínculo e inténtalo de nuevo.",
     };
   }
   if (/discount cannot/i.test(msg)) {

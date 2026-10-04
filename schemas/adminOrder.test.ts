@@ -17,6 +17,44 @@ import type { AdminOrderInput } from "@/types/adminOrder";
 
 const VARIANT = "3f1a2b3c-4d5e-6f70-8192-a3b4c5d6e7f8";
 
+describe("customer account link fields", () => {
+  const base = {
+    customer: { name: "Ana Solano", phone: "8888-8888" },
+    shipping: {
+      address: "200m sur de la iglesia, casa azul",
+      canton_code: "101",
+      canton_name: "San José",
+      province_name: "San José",
+    },
+    items: [{ variant_id: VARIANT, quantity: 1 }],
+    shipping_method: "delivery" as const,
+  };
+  const withCustomer = (customer: Record<string, unknown>) =>
+    adminOrderInputSchema.safeParse({ ...base, customer: { ...base.customer, ...customer } });
+
+  it("accepts an explicit account link", () => {
+    expect(withCustomer({ user_id: VARIANT }).success).toBe(true);
+  });
+
+  it("accepts declining the link", () => {
+    expect(withCustomer({ link_account: false }).success).toBe(true);
+  });
+
+  it("rejects a user_id that is not a UUID", () => {
+    expect(withCustomer({ user_id: "not-a-uuid" }).success).toBe(false);
+  });
+
+  it("rejects linking and declining at once", () => {
+    const result = withCustomer({ user_id: VARIANT, link_account: false });
+    expect(result.success).toBe(false);
+  });
+
+  it("passes the link fields through to the RPC payload untouched", () => {
+    const result = withCustomer({ user_id: VARIANT });
+    expect(result.success && result.data.customer.user_id).toBe(VARIANT);
+  });
+});
+
 function makeInput(overrides: Partial<AdminOrderInput> = {}): AdminOrderInput {
   return {
     customer: { name: "Ana Solano", phone: "8888-8888" },

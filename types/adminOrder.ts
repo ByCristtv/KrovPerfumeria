@@ -16,6 +16,18 @@ export interface AdminOrderCustomerInput {
   phone: string;
   /** Optional — many manual customers only give a phone number. */
   email?: string;
+  /**
+   * Explicit link to a registered account (picked from the customer search, or
+   * accepted from the "this email is registered" hint). The order is then owned
+   * by that account and earns it XP once received.
+   */
+  user_id?: string;
+  /**
+   * `false` = the admin saw the registered-email hint and declined the link.
+   * Suppresses the database's automatic email-based link too. Omit it for the
+   * default: the database links a confirmed account whose email matches.
+   */
+  link_account?: boolean;
 }
 
 export interface AdminOrderShippingInput {
@@ -47,4 +59,24 @@ export interface AdminOrderResult {
   discount: number;
   total: number;
   item_count: number;
+  /** Account the order ended up on (explicit or resolved by email); null = guest. */
+  user_id: string | null;
+}
+
+/** A registered customer as the admin order form sees them. */
+export interface AdminCustomerMatch {
+  user_id: string;
+  full_name: string | null;
+  email: string;
+  phone: string | null;
+  /** Saved delivery address, if the customer has one. province/canton are CODES. */
+  address: AdminCustomerAddress | null;
+}
+
+export interface AdminCustomerAddress {
+  province: string;
+  canton: string;
+  district: string;
+  exact_address: string;
+  reference: string | null;
 }

@@ -22,10 +22,10 @@ const TYPE_LABEL: Record<string, string> = {
  * any sets — each rendered as its own labelled block, and only when it holds
  * at least one variant.
  */
-const GROUP_ORDER: { type: ProductTypes; heading: string; hint: string }[] = [
-  { type: "full_size", heading: "Frasco", hint: "Presentación completa" },
-  { type: "decant", heading: "Decants", hint: "Fracciones del original" },
-  { type: "set", heading: "Sets", hint: "Ediciones especiales" },
+const GROUP_ORDER: { type: ProductTypes; heading: string;}[] = [
+  { type: "full_size", heading: "Frasco" },
+  { type: "decant", heading: "Decants" },
+  { type: "set", heading: "Sets" },
 ];
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
@@ -55,9 +55,7 @@ export default function VariantSelector({
               <h2 className="text-[10px] uppercase tracking-[0.28em] text-krov-ash">
                 {group.heading}
               </h2>
-              <span className="hidden text-[11px] text-krov-dust sm:inline">
-                {group.hint}
-              </span>
+              
             </div>
             <span className="text-[11px] text-krov-dust">
               {group.items.length}{" "}

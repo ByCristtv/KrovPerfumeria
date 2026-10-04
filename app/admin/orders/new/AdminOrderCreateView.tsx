@@ -12,12 +12,24 @@ import {
   type AddressSelection,
 } from "@/lib/cr-geo/selection";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { useRegisteredEmailMatch } from "@/hooks/useRegisteredEmailMatch";
+import { normalizeOptionalEmail } from "@/schemas/adminOrder";
+import {
+  applyCustomerToForm,
+  type AutofillMode,
+} from "@/lib/orders/customerAutofill";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
 import AdminAddressFields from "./AdminAddressFields";
 import Field from "./Field";
+import CustomerCombobox from "./CustomerCombobox";
+import EmailAccountHint from "./EmailAccountHint";
 import { createAdminOrderAction } from "../actions";
-import type { AdminOrderInput, AdminShippingMethod } from "@/types/adminOrder";
+import type {
+  AdminCustomerMatch,
+  AdminOrderInput,
+  AdminShippingMethod,
+} from "@/types/adminOrder";
 import type { AdminVariantRow } from "@/types/product";
 
 interface CartLine {
@@ -52,6 +64,12 @@ export default function AdminOrderCreateView() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  // The registered account this order will belong to (picked from the search or
+  // accepted from the email hint), and the email the admin said "don't link"
+  // for. Declining is remembered PER EMAIL: change the address and the question
+  // is a new one.
+  const [linked, setLinked] = useState<AdminCustomerMatch | null>(null);
+  const [declinedFor, setDeclinedFor] = useState<string | null>(null);
 
   // ── Shipping ──
   // The three geographic levels move together, so they are held as ONE value:
@@ -77,6 +95,10 @@ export default function AdminOrderCreateView() {
   const [shippingLoading, setShippingLoading] = useState(false);
 
   const { data: variants = [], isLoading: variantsLoading } = useAdminProducts();
+
+  const emailKey = normalizeOptionalEmail(email) ?? "";
+  const emailMatch = useRegisteredEmailMatch(email);
+  const declined = declinedFor !== null && declinedFor === emailKey;
 
   // ── Derived totals ──
   const subtotal = useMemo(
@@ -138,6 +160,33 @@ export default function AdminOrderCreateView() {
     };
   }, [cantonCode, subtotal, method]);
 
+  // ── Customer ops ──
+  const applyCustomer = (customer: AdminCustomerMatch, mode: AutofillMode) => {
+    const next = applyCustomerToForm(
+      { name, phone, email, address, exactAddress, reference },
+      customer,
+      mode
+    );
+    setName(next.name);
+    setPhone(next.phone);
+    setEmail(next.email);
+    setAddress(next.address);
+    setExactAddress(next.exactAddress);
+    setReference(next.reference);
+    setLinked(customer);
+    setDeclinedFor(null);
+  };
+
+  const onEmailChange = (value: string) => {
+    setEmail(value);
+    // The link belongs to one identity. Typing a different address means the
+    // admin is no longer talking about that account — keeping the link would
+    // credit XP to someone the order's email no longer points at.
+    if (linked && (normalizeOptionalEmail(value) ?? "") !== linked.email.toLowerCase()) {
+      setLinked(null);
+    }
+  };
+
   // ── Item ops ──
   const addVariant = (v: AdminVariantRow) => {
     setLines((prev) => [...prev, { variant: v, quantity: 1 }]);
@@ -178,6 +227,10 @@ export default function AdminOrderCreateView() {
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
+        // Explicit link wins; otherwise only an explicit "no" is sent. Silence
+        // lets the database link a confirmed account that owns the email.
+        user_id: linked?.user_id,
+        link_account: !linked && declined ? false : undefined,
       },
       shipping: {
         address: exactAddress.trim(),
@@ -237,6 +290,19 @@ export default function AdminOrderCreateView() {
           <div className="space-y-5">
             {/* Customer */}
             <Panel title="Cliente">
+              <div className="mb-4">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-krov-ash">
+                  Cliente registrado
+                </span>
+                <CustomerCombobox
+                  onSelect={(c) => applyCustomer(c, "replace")}
+                  disabled={submitting}
+                />
+                <p className="mt-1 text-[11px] text-krov-ash">
+                  Opcional. Si el cliente tiene cuenta, el pedido se vincula a ella y
+                  suma XP al recibirse.
+                </p>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre *">
                   <input className="adm-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del cliente" />
@@ -245,8 +311,34 @@ export default function AdminOrderCreateView() {
                   <input className="adm-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="8888-8888" inputMode="tel" />
                 </Field>
                 <Field label="Correo (opcional)">
-                  <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@correo.com" inputMode="email" />
+                  <input
+                    className="adm-input"
+                    value={email}
+                    onChange={(e) => onEmailChange(e.target.value)}
+                    onBlur={emailMatch.onBlur}
+                    placeholder="cliente@correo.com"
+                    inputMode="email"
+                    type="email"
+                    autoComplete="off"
+                    aria-describedby="order-email-hint"
+                  />
                 </Field>
+              </div>
+              <div id="order-email-hint" aria-live="polite">
+                <EmailAccountHint
+                  linked={linked}
+                  match={emailMatch.match}
+                  declined={declined}
+                  isChecking={emailMatch.isChecking}
+                  isError={emailMatch.isError}
+                  onLink={(c) => applyCustomer(c, "fill-blanks")}
+                  onUnlink={() => {
+                    setLinked(null);
+                    setDeclinedFor(emailKey || null);
+                  }}
+                  onDecline={() => setDeclinedFor(emailKey)}
+                  onUndoDecline={() => setDeclinedFor(null)}
+                />
               </div>
             </Panel>
 

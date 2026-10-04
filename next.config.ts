@@ -1,5 +1,21 @@
 import type { NextConfig } from "next";
 
+/**
+ * Hostname of the Supabase project the app is currently pointed at. The
+ * production and TESTING projects have different hosts, and uploaded avatars
+ * are served from whichever one `.env.local` selects. Kept in lockstep with
+ * lib/avatar/renderable.ts.
+ */
+function supabaseHostname(): string | null {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
+  } catch {
+    return null;
+  }
+}
+
+const activeSupabaseHost = supabaseHostname();
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
     "https://pavement-exuberant-harness.ngrok-free.dev",
@@ -11,6 +27,15 @@ const nextConfig: NextConfig = {
         hostname: 'xabzbvanmqeplenfoozx.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      ...(activeSupabaseHost && activeSupabaseHost !== 'xabzbvanmqeplenfoozx.supabase.co'
+        ? [
+            {
+              protocol: 'https' as const,
+              hostname: activeSupabaseHost,
+              pathname: '/storage/v1/object/public/**',
+            },
+          ]
+        : []),
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',

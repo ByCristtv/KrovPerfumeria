@@ -58,3 +58,70 @@ export function socialInitial(
   if (!source) return "?";
   return ([...source][0] ?? "?").toUpperCase();
 }
+
+/**
+ * The headline of a friend card: full name when there is one, otherwise the
+ * username, otherwise the anonymous label.
+ *
+ * This is the reverse preference of {@link socialDisplayName}, on purpose. That
+ * one serves lists that carry a username and nothing richer; a friend card has
+ * both and is built as "Aurora Vega" over "@aurora", the way a person is
+ * introduced: name first, handle second.
+ */
+export function socialHeadline(
+  username: string | null | undefined,
+  fullName?: string | null
+): string {
+  return clean(fullName) ?? clean(username) ?? SOCIAL_ANONYMOUS_NAME;
+}
+
+/** `@username`, or null when there is none to show. */
+export function socialHandle(username: string | null | undefined): string | null {
+  const name = clean(username);
+  return name ? `@${name}` : null;
+}
+
+/**
+ * Lower-cased and accent-stripped, for instant client-side filtering: typing
+ * "andres" must find "Andrés". Spanish names make this a requirement here, not
+ * a nicety.
+ */
+export function normalizeForSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * How long ago a request arrived, coarse and in Spanish: "hoy", "ayer",
+ * "hace 3 días", then "hace 2 semanas" / "hace 3 meses". Social urgency comes
+ * from "this has been waiting", not from the minute it landed.
+ */
+export function formatRequestAge(iso: string, now: Date = new Date()): string | null {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return null;
+
+  const days = Math.floor((now.getTime() - then.getTime()) / 86_400_000);
+  if (days <= 0) return "hoy";
+  if (days === 1) return "ayer";
+  if (days < 7) return `hace ${days} días`;
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return `hace ${weeks} ${weeks === 1 ? "semana" : "semanas"}`;
+  }
+  const months = Math.floor(days / 30);
+  return `hace ${months} ${months === 1 ? "mes" : "meses"}`;
+}
+
+/**
+ * "sept. 2026" from an ISO timestamp, in the storefront's locale. Month and
+ * year only: the exact day a friendship began is not something the card needs
+ * to say, and a coarse date ages better than a precise one.
+ */
+export function formatFriendsSince(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("es-CR", { month: "short", year: "numeric" });
+}
