@@ -1,5 +1,6 @@
 import { formatXp } from "@/lib/format";
-import { getRankInfo, RANK_THRESHOLDS } from "@/lib/rank";
+import { getRankInfo } from "@/lib/rank";
+import RankBadge from "@/components/rank/RankBadge";
 import { RANKING_TOP_COUNT, type RankingEntry } from "@/types/ranking";
 
 /**
@@ -117,7 +118,10 @@ function PodiumCard({ entry }: { entry: RankingEntry }) {
           <span className="sr-only">{entry.position}. </span>
           {entry.username}
         </p>
-        <RankTag rank={entry.rank} className="mt-1 justify-center" />
+        <div className="mt-1.5 flex flex-col items-center gap-1">
+          <RankBadge rank={entry.rank} size={isFirst ? "lg" : "md"} decorative />
+          <RankName rank={entry.rank} />
+        </div>
 
         <XpMeter xp={entry.experiencePoints} compact className="mt-2.5" />
       </div>
@@ -151,7 +155,10 @@ function StandingRow({ entry }: { entry: RankingEntry }) {
               <span className="sr-only">{entry.position}. </span>
               {entry.username}
             </p>
-            <RankTag rank={entry.rank} className="shrink-0" />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <RankName rank={entry.rank} />
+              <RankBadge rank={entry.rank} size="md" decorative />
+            </div>
           </div>
           <XpMeter xp={entry.experiencePoints} className="mt-2" />
         </div>
@@ -176,19 +183,12 @@ function Avatar({ name, className }: { name: string; className: string }) {
   );
 }
 
-/** Rank name with its level bottle (1 of 5 — fuller bottle, higher rank). */
-function RankTag({ rank, className = "" }: { rank: RankingEntry["rank"]; className?: string }) {
-  const level = RANK_THRESHOLDS.findIndex((t) => t.rank === rank) + 1;
+/** The CURRENT rank's name, printed beside its badge. */
+function RankName({ rank }: { rank: RankingEntry["rank"] }) {
   return (
-    <p
-      className={`flex items-center gap-1 text-[9px] uppercase tracking-[0.16em] text-krov-ash sm:text-[10px] sm:tracking-[0.2em] ${className}`}
-    >
-      <BottleIcon level={level} className="h-3.5 w-2.5 shrink-0 text-krov-rose sm:h-4 sm:w-3" />
-      <span>{rank}</span>
-      <span aria-hidden className="text-krov-dust">
-        Nv.{level}
-      </span>
-    </p>
+    <span className="text-[9px] font-medium uppercase tracking-[0.16em] text-krov-ash sm:text-[10px] sm:tracking-[0.2em]">
+      {rank}
+    </span>
   );
 }
 
@@ -232,7 +232,7 @@ function XpMeter({
           <span className="block truncate text-[9px] text-krov-dust sm:text-[10px]">
             {info.nextRankXP === null
               ? "Rango máximo"
-              : `/ ${formatXp(info.nextRankXP)} · ${info.nextRank}`}
+              : `/ ${formatXp(info.nextRankXP)} · sig. ${info.nextRank}`}
           </span>
         </p>
       ) : (
@@ -244,7 +244,7 @@ function XpMeter({
             )}
           </span>
           <span className="truncate text-[10px] text-krov-dust">
-            {info.nextRank === null ? "Rango máximo" : `→ ${info.nextRank}`}
+            {info.nextRank === null ? "Rango máximo" : `Siguiente: ${info.nextRank}`}
           </span>
         </p>
       )}
@@ -303,8 +303,8 @@ function Crown({ className }: { className: string }) {
 }
 
 /**
- * Perfume bottle, filled `level` fifths of the way up. Used for the rank level
- * (Fraiche 1 … Parfum 5) and, full and gold, beside the first-place numeral.
+ * Perfume bottle, filled `level` fifths of the way up. Drawn full and gold
+ * beside the first-place numeral.
  * Everything is `currentColor`, so no gradient ids are needed — they would have
  * to be unique per instance across ten cards.
  */
@@ -381,16 +381,16 @@ export function RankingBoardSkeleton() {
     >
       <div className="flex items-end justify-center gap-2 pt-7 sm:gap-4">
         {[
-          "order-1 h-44 w-[31%] sm:max-w-[13rem]",
-          "order-2 h-56 w-[37%] sm:max-w-[16rem]",
-          "order-3 h-44 w-[31%] sm:max-w-[13rem]",
+          "order-1 h-[15.5rem] w-[31%] sm:h-[18.5rem] sm:max-w-[13rem]",
+          "order-2 h-[21rem] w-[37%] sm:h-[24.5rem] sm:max-w-[16rem]",
+          "order-3 h-[15.5rem] w-[31%] sm:h-[18.5rem] sm:max-w-[13rem]",
         ].map((cls) => (
           <div key={cls} className={`rounded-md bg-white/[0.06] ${cls}`} />
         ))}
       </div>
       <div className="mt-5 space-y-2.5 sm:mt-7 sm:space-y-3">
         {Array.from({ length: Math.max(0, RANKING_TOP_COUNT - 3) }).map((_, i) => (
-          <div key={i} className="h-[5.25rem] rounded-md bg-white/[0.05] sm:h-24" />
+          <div key={i} className="h-[6.5rem] rounded-md bg-white/[0.05] sm:h-28" />
         ))}
       </div>
     </div>

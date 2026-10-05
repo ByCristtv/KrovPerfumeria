@@ -8,39 +8,75 @@ import type { Tables } from "@/types/database";
  * number, so the UI and any server code share one source of truth.
  *
  * XP rule (mirrors `grant_order_xp` in SQL): 50 XP per full ₡1,000 of an
- * order's total, granted once, only when the order reaches `received`.
+ * order's DISCOUNTED SUBTOTAL (goods minus any coupon; shipping and tax never
+ * count), granted once, only when the order reaches `received`.
  */
 
-export type UserRank = "Fraiche" | "Cologne" | "EDT" | "EDP" | "Parfum";
+export type UserRank =
+  | "Aficionado"
+  | "Coleccionista"
+  | "Conocedor"
+  | "Alquimista"
+  | "Maestro";
 
 /** One tier in the ladder. `minXP` is inclusive; the next tier's `minXP` is the cap. */
 export interface RankDefinition {
   rank: UserRank;
   minXP: number;
+  /** Badge file inside {@link RANK_ICON_BUCKET}/{@link RANK_ICON_FOLDER}. */
+  icon: string;
 }
 
 /**
  * THE single source of truth for thresholds — no magic numbers anywhere else.
  * Must stay sorted ascending by `minXP`.
  *
- *   Fraiche  0      – 999
- *   Cologne  1,000  – 4,999
- *   EDT      5,000  – 9,999 
- *   EDP      10,000 – 17,999 
- *   Parfum   18,000 + 
+ *   Aficionado     0      – 999
+ *   Coleccionista  1,000  – 4,999
+ *   Conocedor      5,000  – 9,999
+ *   Alquimista     10,000 – 17,999
+ *   Maestro        18,000 +
+ *
+ * (Formerly Fraiche / Cologne / EDT / EDP / Parfum. Only the display names
+ * changed — the database stores XP, never a rank, so no data migration.)
  */
 export const RANK_THRESHOLDS: readonly RankDefinition[] = [
-  { rank: "Fraiche", minXP: 0 },
-  { rank: "Cologne", minXP: 1_000 },
-  { rank: "EDT", minXP: 5_000 },
-  { rank: "EDP", minXP: 10_000 },
-  { rank: "Parfum", minXP: 18_000 },
+  { rank: "Aficionado", minXP: 0, icon: "Aficionado.avif" },
+  { rank: "Coleccionista", minXP: 1_000, icon: "Coleccionista.avif" },
+  { rank: "Conocedor", minXP: 5_000, icon: "Conocedor.avif" },
+  { rank: "Alquimista", minXP: 10_000, icon: "Alquimista.avif" },
+  { rank: "Maestro", minXP: 18_000, icon: "Krov.avif" },
 ] as const;
+
+/** Public Supabase Storage bucket + folder holding the rank badges. */
+export const RANK_ICON_BUCKET = "rank-icons";
+export const RANK_ICON_FOLDER = "icons";
+
+/**
+ * Public URL of a rank's badge:
+ * `<SUPABASE_URL>/storage/v1/object/public/rank-icons/icons/<file>`.
+ *
+ * Built from `NEXT_PUBLIC_SUPABASE_URL` (inlined at build time, so it works in
+ * client components too) and therefore follows whichever project the app is
+ * pointed at — the bucket must exist there. Returns null when the env var is
+ * missing, and the badge falls back to a monogram.
+ */
+export function getRankIconUrl(rank: UserRank): string | null {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
+  const tier = RANK_THRESHOLDS.find((t) => t.rank === rank);
+  if (!base || !tier) return null;
+  return `${base}/storage/v1/object/public/${RANK_ICON_BUCKET}/${RANK_ICON_FOLDER}/${tier.icon}`;
+}
+
+/** 1-based position of a rank on the ladder (Aficionado 1 … Maestro 5). */
+export function getRankLevel(rank: UserRank): number {
+  return RANK_THRESHOLDS.findIndex((t) => t.rank === rank) + 1;
+}
 
 /** Full breakdown of where a given XP total sits in the ladder. */
 export interface RankInfo {
   currentRank: UserRank;
-  /** `null` once the top rank (Parfum) is reached. */
+  /** `null` once the top rank (Maestro) is reached. */
   nextRank: UserRank | null;
   currentXP: number;
   currentRankMinXP: number;
@@ -127,13 +163,16 @@ export function getRankInfo(xp: number): RankInfo {
 }
 
 /**
- * XP earned by an order of the given total — the client-side mirror of the
- * SQL `grant_order_xp` formula. The database remains the source of truth for
- * actually awarding XP; this is for previews/estimates and tests.
+ * XP earned by an order — the client-side mirror of the SQL `grant_order_xp`
+ * formula. The database remains the source of truth for actually awarding XP;
+ * this is for previews/estimates and tests.
+ *
+ * Pass the DISCOUNTED SUBTOTAL: what the goods cost after any coupon, before
+ * shipping and tax. (Passing the order total would credit shipping as XP.)
  */
-export function calculateOrderXp(total: number): number {
-  if (!Number.isFinite(total) || total <= 0) return 0;
-  return Math.floor(total / 1000) * 50;
+export function calculateOrderXp(discountedSubtotal: number): number {
+  if (!Number.isFinite(discountedSubtotal) || discountedSubtotal <= 0) return 0;
+  return Math.floor(discountedSubtotal / 1000) * 50;
 }
 
 /** A single audit-log row from `profile_experience_events`. */

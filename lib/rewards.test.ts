@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { formatPrice } from "@/lib/format";
 import { RANK_THRESHOLDS, getRankFromXP, type UserRank } from "@/lib/rank";
 import {
-  FREE_FRAGRANCE_MAX_VALUE,
   RANK_REWARDS,
   REWARD_MIN_PURCHASE,
   buildRewardsRoadmap,
@@ -18,11 +17,11 @@ const SPEC: Array<{
   max: number | null;
   percent: number | null;
 }> = [
-  { rank: "Fraiche", min: 0, max: 999, percent: null },
-  { rank: "Cologne", min: 1_000, max: 4_999, percent: 5 },
-  { rank: "EDT", min: 5_000, max: 9_999, percent: 8 },
-  { rank: "EDP", min: 10_000, max: 17_999, percent: 12 },
-  { rank: "Parfum", min: 18_000, max: null, percent: null },
+  { rank: "Aficionado", min: 0, max: 999, percent: null },
+  { rank: "Coleccionista", min: 1_000, max: 4_999, percent: 5 },
+  { rank: "Conocedor", min: 5_000, max: 9_999, percent: 8 },
+  { rank: "Alquimista", min: 10_000, max: 17_999, percent: 12 },
+  { rank: "Maestro", min: 18_000, max: null, percent: 18 },
 ];
 
 describe("RANK_REWARDS", () => {
@@ -32,8 +31,8 @@ describe("RANK_REWARDS", () => {
     );
   });
 
-  it("gives Fraiche no reward", () => {
-    expect(getRewardForRank("Fraiche").kind).toBe("none");
+  it("gives Aficionado no reward", () => {
+    expect(getRewardForRank("Aficionado").kind).toBe("none");
   });
 
   it.each(SPEC.filter((s) => s.percent !== null))(
@@ -46,52 +45,57 @@ describe("RANK_REWARDS", () => {
     }
   );
 
-  it("gives Parfum a free fragrance under the value ceiling", () => {
-    const reward = getRewardForRank("Parfum");
-    expect(reward.kind).toBe("free_fragrance");
-    expect(reward.maxValue).toBe(FREE_FRAGRANCE_MAX_VALUE);
-    expect(reward.discountPercent).toBeNull();
+  it("gives Maestro the same kind of reward as every other paid tier — a discount, no longer a free fragrance", () => {
+    const reward = getRewardForRank("Maestro");
+    expect(reward.kind).toBe("discount");
+    expect(reward.discountPercent).toBe(18);
   });
 
-  it("uses 25.000 CRC for both the discount floor and the free-fragrance ceiling", () => {
-    expect(REWARD_MIN_PURCHASE).toBe(25_000);
-    expect(FREE_FRAGRANCE_MAX_VALUE).toBe(25_000);
+  it("uses 20.000 CRC as the discount floor", () => {
+    expect(REWARD_MIN_PURCHASE).toBe(20_000);
   });
 });
 
 describe("reward copy", () => {
   /**
-   * Asserted through formatPrice rather than a literal "₡25.000": the es-CR
+   * Asserted through formatPrice rather than a literal "₡20.000": the es-CR
    * group separator is whatever the running ICU says it is (a narrow no-break
    * space on current Node/Chrome), and pinning it here would make the suite
    * fail on an ICU upgrade without anything being wrong.
    */
-  const MIN_PURCHASE_TEXT = formatPrice(25_000);
+  const MIN_PURCHASE_TEXT = formatPrice(20_000);
 
   it("summarizes a discount as a percentage", () => {
-    expect(summarizeReward(getRewardForRank("EDT"))).toBe("8% de descuento");
+    expect(summarizeReward(getRewardForRank("Conocedor"))).toBe("8% de descuento");
   });
 
-  it("summarizes the top reward as a free fragrance", () => {
-    expect(summarizeReward(getRewardForRank("Parfum"))).toBe(
-      "1 fragancia gratis"
+  it("summarizes the top reward as an 18% discount", () => {
+    expect(summarizeReward(getRewardForRank("Maestro"))).toBe(
+      "18% de descuento"
     );
   });
 
   it("states the discount percentage and the minimum purchase together", () => {
-    const text = describeReward(getRewardForRank("EDP"));
+    const text = describeReward(getRewardForRank("Alquimista"));
     expect(text).toContain("12%");
     expect(text).toContain(MIN_PURCHASE_TEXT);
   });
 
-  it("states the free fragrance's value ceiling", () => {
-    const text = describeReward(getRewardForRank("Parfum"));
-    expect(text).toMatch(/fragancia/i);
+  it("states the top reward's percentage and minimum purchase", () => {
+    const text = describeReward(getRewardForRank("Maestro"));
+    expect(text).toContain("18%");
     expect(text).toContain(MIN_PURCHASE_TEXT);
+    expect(text).not.toMatch(/fragancia/i);
+  });
+
+  it("says each discount is a single-use coupon", () => {
+    expect(describeReward(getRewardForRank("Coleccionista"))).toMatch(
+      /un solo uso/i
+    );
   });
 
   it("says plainly that the starting tier has no reward", () => {
-    expect(describeReward(getRewardForRank("Fraiche"))).toMatch(
+    expect(describeReward(getRewardForRank("Aficionado"))).toMatch(
       /todavía no hay recompensa/i
     );
   });
@@ -114,7 +118,7 @@ describe("buildRewardsRoadmap — tier ranges", () => {
 
   it("leaves the top tier open-ended", () => {
     const top = buildRewardsRoadmap(0).steps.at(-1)!;
-    expect(top.rank).toBe("Parfum");
+    expect(top.rank).toBe("Maestro");
     expect(top.maxXP).toBeNull();
   });
 
@@ -147,39 +151,39 @@ describe("buildRewardsRoadmap — viewer status", () => {
     }
   });
 
-  it("marks a brand-new customer as current at Fraiche and locks everything above", () => {
+  it("marks a brand-new customer as current at Aficionado and locks everything above", () => {
     expect(statusesAt(0)).toEqual({
-      Fraiche: "current",
-      Cologne: "locked",
-      EDT: "locked",
-      EDP: "locked",
-      Parfum: "locked",
+      Aficionado: "current",
+      Coleccionista: "locked",
+      Conocedor: "locked",
+      Alquimista: "locked",
+      Maestro: "locked",
     });
   });
 
   it("marks passed tiers unlocked and future tiers locked mid-ladder", () => {
     expect(statusesAt(12_000)).toEqual({
-      Fraiche: "unlocked",
-      Cologne: "unlocked",
-      EDT: "unlocked",
-      EDP: "current",
-      Parfum: "locked",
+      Aficionado: "unlocked",
+      Coleccionista: "unlocked",
+      Conocedor: "unlocked",
+      Alquimista: "current",
+      Maestro: "locked",
     });
   });
 
   it("unlocks the whole ladder at the top rank", () => {
     expect(statusesAt(25_000)).toEqual({
-      Fraiche: "unlocked",
-      Cologne: "unlocked",
-      EDT: "unlocked",
-      EDP: "unlocked",
-      Parfum: "current",
+      Aficionado: "unlocked",
+      Coleccionista: "unlocked",
+      Conocedor: "unlocked",
+      Alquimista: "unlocked",
+      Maestro: "current",
     });
   });
 
   it("promotes exactly at a threshold, not one XP early", () => {
-    expect(statusesAt(999).Cologne).toBe("locked");
-    expect(statusesAt(1_000).Cologne).toBe("current");
+    expect(statusesAt(999).Coleccionista).toBe("locked");
+    expect(statusesAt(1_000).Coleccionista).toBe("current");
   });
 
   it("reports every tier as unknown for a signed-out visitor", () => {
@@ -196,16 +200,16 @@ describe("buildRewardsRoadmap — viewer status", () => {
 describe("buildRewardsRoadmap — viewer progress", () => {
   it("exposes the reward held now and the one being worked toward", () => {
     const { viewer } = buildRewardsRoadmap(6_000);
-    expect(viewer?.currentRank).toBe("EDT");
+    expect(viewer?.currentRank).toBe("Conocedor");
     expect(viewer?.currentReward.discountPercent).toBe(8);
-    expect(viewer?.nextRank).toBe("EDP");
+    expect(viewer?.nextRank).toBe("Alquimista");
     expect(viewer?.nextReward?.discountPercent).toBe(12);
   });
 
   it("reports the XP still needed for the next reward", () => {
     const { viewer } = buildRewardsRoadmap(4_000);
     expect(viewer?.xpRemaining).toBe(1_000);
-    expect(viewer?.nextRank).toBe("EDT");
+    expect(viewer?.nextRank).toBe("Conocedor");
   });
 
   it("has no next reward at the top rank", () => {
@@ -216,7 +220,7 @@ describe("buildRewardsRoadmap — viewer progress", () => {
   });
 
   it("clamps nonsense XP to the starting tier instead of throwing", () => {
-    expect(buildRewardsRoadmap(-500).viewer?.currentRank).toBe("Fraiche");
-    expect(buildRewardsRoadmap(Number.NaN).viewer?.currentRank).toBe("Fraiche");
+    expect(buildRewardsRoadmap(-500).viewer?.currentRank).toBe("Aficionado");
+    expect(buildRewardsRoadmap(Number.NaN).viewer?.currentRank).toBe("Aficionado");
   });
 });

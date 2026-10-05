@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Package } from "lucide-react";
+import { ChevronRight, Package, Ticket } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/hooks/useAuthUser";
+import { useUserCoupons } from "@/hooks/useUserCoupons";
+import { groupCoupons } from "@/lib/coupons/discount";
 import RankProgress from "@/components/account/RankProgress";
 import IdentitySection from "@/components/account/IdentitySection";
 import ContactSection from "@/components/account/ContactSection";
@@ -161,6 +163,7 @@ export default function ProfileView() {
             </Card>
 
             <OrdersLinkCard />
+            <CouponsLinkCard />
           </div>
 
           <div className="krov-enter-stagger space-y-5">
@@ -213,6 +216,52 @@ function OrdersLinkCard() {
         </span>
         <span className="mt-0.5 block text-xs leading-relaxed text-white/45">
           Historial, estado y detalle de tus compras
+        </span>
+      </span>
+      <ChevronRight
+        size={18}
+        aria-hidden
+        className="shrink-0 text-krov-rose/70 transition-transform duration-300 group-hover:translate-x-1"
+      />
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coupons entry point
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * "Mis cupones": same single-link card as "Ver pedidos", plus a count of the
+ * coupons that can be spent right now. The count is a hint, not a gate — while
+ * it loads (or if it fails) the card simply renders without it.
+ */
+function CouponsLinkCard() {
+  const { data } = useUserCoupons();
+  const available = data ? groupCoupons(data).available.length : 0;
+
+  return (
+    <Link
+      href="/profile/coupons"
+      className="group flex items-center gap-4 rounded-2xl border border-krov-blood/25 bg-black/50 p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm transition-colors duration-300 hover:border-krov-blood/60 hover:bg-krov-blood/[0.05] sm:p-6"
+    >
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-krov-blood/40 text-krov-rose transition-colors duration-300 group-hover:bg-krov-blood group-hover:text-black">
+        <Ticket size={20} strokeWidth={1.5} aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span
+          className="flex items-center gap-2 text-xl leading-snug text-white"
+          style={{ fontFamily: SERIF }}
+        >
+          Mis cupones
+          {available > 0 && (
+            <span className="rounded-full bg-krov-blood px-2 py-0.5 font-sans text-[10px] font-medium tabular-nums text-black">
+              {available}
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-white/45">
+          Descuentos que desbloqueas al subir de nivel
         </span>
       </span>
       <ChevronRight
@@ -367,9 +416,12 @@ function ProfileSkeleton() {
               <SkeletonRegion>
                 <HeaderBone />
                 <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <TextBone className="text-xs" width="5rem" />
-                    <Bone className="mt-2 h-[35px] w-32 rounded-full" />
+                  <div className="flex items-center gap-3.5">
+                    <Bone className="h-16 w-16 shrink-0 rounded-full" />
+                    <div>
+                      <TextBone className="text-xs" width="5rem" />
+                      <Bone className="mt-2 h-[35px] w-32 rounded-full" />
+                    </div>
                   </div>
                   <TextBone className="text-sm" width="3.5rem" />
                 </div>

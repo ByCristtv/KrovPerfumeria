@@ -12,6 +12,7 @@ import {
   type RoadmapStepStatus,
 } from "@/lib/rewards";
 import { TextBone } from "@/components/ui/Skeleton";
+import RankBadge from "@/components/rank/RankBadge";
 
 interface RewardsRoadmapProps {
   /**
@@ -97,12 +98,15 @@ export default function RewardsRoadmap({
         <p className="text-[10px] uppercase tracking-[0.24em] text-krov-dust tabular-nums">
           {rangeLabel(selected)} XP
         </p>
-        <h3
-          className="krov-display mt-2 text-xl text-krov-bone sm:text-2xl"
-          data-testid="roadmap-detail-rank"
-        >
-          {selected.rank}
-        </h3>
+        <div className="mt-2 flex items-center gap-3">
+          <RankBadge rank={selected.rank} size="lg" decorative />
+          <h3
+            className="krov-display text-xl text-krov-bone sm:text-2xl"
+            data-testid="roadmap-detail-rank"
+          >
+            {selected.rank}
+          </h3>
+        </div>
         <p className="mt-3 text-sm leading-relaxed text-krov-ash">
           {describeReward(selected.reward)}
         </p>
@@ -147,7 +151,7 @@ function TimelineStep({
       {!isLast && (
         <span
           aria-hidden
-          className={`absolute left-[7px] top-5 h-[calc(100%-1.25rem)] w-px md:left-[calc(50%+8px)] md:top-[7px] md:h-px md:w-[calc(100%-16px)] ${tone.connector}`}
+          className={`absolute left-[19.5px] top-11 h-[calc(100%-2.75rem)] w-px md:left-[calc(50%+24px)] md:top-[19.5px] md:h-px md:w-[calc(100%-40px)] ${tone.connector}`}
         />
       )}
 
@@ -161,21 +165,20 @@ function TimelineStep({
           selected ? "opacity-100" : "opacity-80 hover:opacity-100"
         }`}
       >
-        {/* Node. A fixed 15px dot, so the connector can be pinned to its centre
-            at both orientations with one offset instead of two magic numbers. */}
+        {/* Node: the tier's badge in a fixed 40px box, so the connector can be
+            pinned to its centre at both orientations with one offset. Status
+            reads from the treatment (locked tiers are desaturated) and from the
+            text badge below; the name is printed beside it, so it's decorative. */}
         <span
-          aria-hidden
-          className={`mt-0.5 flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border transition-colors md:mt-0 ${
-            tone.dot
+          className={`relative flex size-10 shrink-0 items-center justify-center rounded-full transition-[filter,opacity] ${
+            tone.node
           } ${
             selected
-              ? "ring-2 ring-krov-blood/40 ring-offset-2 ring-offset-krov-void"
+              ? "ring-2 ring-krov-blood/50 ring-offset-2 ring-offset-krov-void"
               : ""
           }`}
         >
-          {step.status === "unlocked" && (
-            <span className="h-1.5 w-1.5 rounded-full bg-krov-void" />
-          )}
+          <RankBadge rank={step.rank} size="md" decorative />
         </span>
 
         <span className="min-w-0 md:mt-4">
@@ -215,7 +218,8 @@ function ViewerProgress({ viewer }: { viewer: RewardsRoadmapViewer }) {
           <p className="text-[10px] uppercase tracking-[0.24em] text-krov-dust">
             Tu rango
           </p>
-          <p className="krov-display mt-1 text-2xl text-krov-rose">
+          <p className="krov-display mt-1 flex items-center gap-2.5 text-2xl text-krov-rose">
+            <RankBadge rank={viewer.currentRank} size="md" decorative />
             {viewer.currentRank}
           </p>
         </div>
@@ -270,7 +274,7 @@ function ViewerProgress({ viewer }: { viewer: RewardsRoadmapViewer }) {
 const STATUS_TONE: Record<
   RoadmapStepStatus,
   {
-    dot: string;
+    node: string;
     connector: string;
     title: string;
     badge: string | null;
@@ -278,28 +282,28 @@ const STATUS_TONE: Record<
   }
 > = {
   unlocked: {
-    dot: "border-krov-rose bg-krov-rose",
+    node: "",
     connector: "bg-krov-rose/50",
     title: "text-krov-bone",
     badge: "Desbloqueado",
     badgeClass: "border border-krov-rose/40 text-krov-rose",
   },
   current: {
-    dot: "border-krov-blood bg-krov-blood",
+    node: "shadow-[0_0_18px_-2px_rgba(255,11,85,0.55)]",
     connector: "bg-krov-smoke",
     title: "text-krov-rose",
     badge: "Tu rango",
     badgeClass: "border border-krov-blood bg-krov-blood/15 text-krov-rose",
   },
   locked: {
-    dot: "border-krov-smoke bg-krov-void",
+    node: "opacity-45 grayscale",
     connector: "bg-krov-smoke",
     title: "text-krov-ash",
     badge: "Bloqueado",
     badgeClass: "border border-krov-smoke text-krov-dust",
   },
   unknown: {
-    dot: "border-krov-edge bg-krov-void",
+    node: "",
     connector: "bg-krov-smoke",
     title: "text-krov-bone",
     badge: null,
@@ -369,7 +373,7 @@ export function RewardsRoadmapSkeleton() {
               key={i}
               className="flex gap-4 pb-7 last:pb-0 md:flex-col md:items-center md:pb-0"
             >
-              <div className="mt-0.5 h-[15px] w-[15px] shrink-0 rounded-full bg-white/10 md:mt-0" />
+              <div className="size-10 shrink-0 rounded-full bg-white/10" />
               <div className="w-full md:mt-4">
                 <div className="h-4 w-20 bg-white/10 md:mx-auto" />
                 <div className="mt-2 h-2.5 w-28 bg-white/[0.06] md:mx-auto" />
@@ -382,7 +386,10 @@ export function RewardsRoadmapSkeleton() {
         {/* Detail panel — same shell and type rhythm as the real one. */}
         <div className="mt-8 border border-krov-smoke bg-krov-coal p-5 sm:p-6">
           <TextBone className="text-[10px]" width="6rem" />
-          <TextBone className="mt-2 text-xl sm:text-2xl" width="9rem" strong />
+          <div className="mt-2 flex items-center gap-3">
+            <div className="size-16 shrink-0 rounded-full bg-white/10" />
+            <TextBone className="text-xl sm:text-2xl" width="9rem" strong />
+          </div>
           <TextBone className="mt-3 text-sm leading-relaxed" width="85%" />
         </div>
       </div>

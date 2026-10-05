@@ -33,7 +33,11 @@ export interface PendingOrder {
   order_number: number;
   subtotal: number;
   shipping_cost: number;
+  /** Coupon reduction already written to the order by apply_order_coupon; 0 when none. */
+  discount: number;
   total: number;
+  /** The customer's coupon held by this order, or null. */
+  user_coupon_id: string | null;
   order_status: Database["public"]["Enums"]["order_status"];
   payment_status: Database["public"]["Enums"]["payment_status"];
   payment_provider: PaymentProvider | null;
@@ -103,7 +107,7 @@ export async function loadOrder(
   const { data, error } = await admin
     .from("orders")
     .select(
-      `id, order_number, subtotal, shipping_cost, total,
+      `id, order_number, subtotal, shipping_cost, discount, total, user_coupon_id,
        order_status, payment_status, payment_provider, payment_reference,
        order_items ( variant_id, quantity )`
     )
@@ -121,7 +125,9 @@ export async function loadOrder(
     order_number: data.order_number,
     subtotal: data.subtotal,
     shipping_cost: data.shipping_cost,
+    discount: data.discount,
     total: data.total,
+    user_coupon_id: data.user_coupon_id,
     order_status: data.order_status,
     payment_status: data.payment_status,
     // The column is free-text; anything we didn't write is not a provider we can

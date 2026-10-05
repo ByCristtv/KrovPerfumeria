@@ -18,12 +18,21 @@ interface OrderSummaryProps {
   district?: string;
   /** The customer's "Cariari centro" opt-in, if they ticked it. */
   localDelivery?: boolean;
+  /**
+   * PREVIEW of the applied level coupon's saving (CRC), 0 when none. The order
+   * itself is discounted by the database; this keeps the total honest on screen.
+   */
+  couponDiscount?: number;
+  /** Name shown on the coupon line. */
+  couponName?: string;
 }
 
 export default function OrderSummary({
   cantonCode,
   district,
   localDelivery,
+  couponDiscount = 0,
+  couponName,
 }: OrderSummaryProps) {
   // Zustand cart persists in localStorage. SSR renders empty, client hydrates
   // with the real cart → guard against the hydration mismatch.
@@ -75,7 +84,9 @@ export default function OrderSummary({
     localDelivery
   );
   const shippingCost = resolved.cost;
-  const total = goodsSubtotal + shippingCost;
+  // The coupon comes off the goods only; shipping is priced on the full subtotal,
+  // exactly as the server prices it.
+  const total = goodsSubtotal - couponDiscount + shippingCost;
 
   // A threshold the customer no longer needs to reach is not worth nagging about.
   const thresholdRemaining =
@@ -134,6 +145,15 @@ export default function OrderSummary({
           <dt>Subtotal</dt>
           <dd className="tabular-nums">{formatPrice(goodsSubtotal)}</dd>
         </div>
+
+        {couponDiscount > 0 && (
+          <div className="flex items-center justify-between gap-3 text-krov-rose">
+            <dt className="min-w-0 truncate">
+              Cupón{couponName ? ` · ${couponName}` : ""}
+            </dt>
+            <dd className="shrink-0 tabular-nums">−{formatPrice(couponDiscount)}</dd>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-krov-ash">
           <dt>Envío</dt>

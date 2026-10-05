@@ -88,6 +88,7 @@ export default async function OrderPage({
       shipping_reference,
       subtotal,
       shipping_cost,
+      discount,
       total,
       order_status,
       payment_status,
@@ -207,6 +208,12 @@ export default async function OrderPage({
                 <dt>Subtotal</dt>
                 <dd className="tabular-nums">{formatPrice(order.subtotal)}</dd>
               </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between text-krov-rose">
+                  <dt>Descuento</dt>
+                  <dd className="tabular-nums">−{formatPrice(order.discount)}</dd>
+                </div>
+              )}
               <div className="flex justify-between text-krov-ash">
                 <dt>Envío</dt>
                 <dd className="tabular-nums">

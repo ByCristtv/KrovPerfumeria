@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { signOrderToken, verifyOrderToken } from "@/lib/orders/tokens";
 import type { Database } from "@/types/database";
 import { alreadyPaidError, sessionNotFoundError } from "./errors";
+import { applyCouponToOrder } from "./couponService";
 import { resolveShippingCost } from "@/lib/shipping/localDelivery";
 import {
   calculateShipping,
@@ -49,6 +50,12 @@ export interface CheckoutInput {
   items: CheckoutLineItem[];
   notes?: string;
   payment_method: PaymentMethodId;
+  /**
+   * The customer's chosen level coupon (a user_coupons id), or null/absent for
+   * none. Only an INTENT: ownership, status, minimum and the discount amount are
+   * all decided by the apply_order_coupon RPC.
+   */
+  user_coupon_id?: string | null;
   /** Present once this checkout has a live pending order. */
   session?: CheckoutSessionRef;
 }
@@ -58,6 +65,10 @@ export interface CheckoutResult {
   order_number: number;
   subtotal: number;
   shipping_cost: number;
+  /** Coupon reduction included in `total`; 0 when no coupon is on the order. */
+  discount: number;
+  /** The coupon this order holds, or null. */
+  user_coupon_id: string | null;
   total: number;
   item_count: number;
   order_token: string;
@@ -91,7 +102,16 @@ export async function submitCheckout(
   // Item deltas need stock changes place_order can't express, so retire this
   // order — restoring its stock — and place a fresh one. Cancelling FIRST is what
   // preserves the invariant: never two live pending orders for one checkout.
-  if (!itemsMatch(existing.items, input.items)) {
+  //
+  // A different coupon takes the same road, for the same reason: the discount is
+  // baked into the order's total and into the payment already prepared for it,
+  // and a coupon can only be swapped by spending a new one. Retiring the order
+  // is also what hands the OLD coupon back (trg_orders_sync_coupon fires on the
+  // denial), so it is free to be re-applied below if the customer kept it.
+  if (
+    !itemsMatch(existing.items, input.items) ||
+    (existing.user_coupon_id ?? null) !== (input.user_coupon_id ?? null)
+  ) {
     const processor = findProcessorByProvider(existing.payment_provider);
     if (processor) {
       await processor.releasePayment(paymentRecordOf(existing));
@@ -149,6 +169,35 @@ async function createCheckout(
   });
 
   /*
+   * Level coupon, spent on the order place_order just created.
+   *
+   * It comes BEFORE the shipping override and the payment for the same reason
+   * those two are ordered the way they are: the payment is created for a specific
+   * total, so the discount must already be in the order by then. If the coupon is
+   * rejected (below its minimum, spent in another tab, expired) nothing has been
+   * charged yet — the order is cancelled, which restores its stock, and the
+   * customer gets the database's own reason.
+   *
+   * The amount is whatever the RPC wrote; it is never an input to this function.
+   */
+  let couponDiscount = 0;
+  let appliedCouponId: string | null = null;
+  if (input.user_coupon_id) {
+    try {
+      const applied = await applyCouponToOrder(
+        deps.supabase,
+        placed.order_id,
+        input.user_coupon_id
+      );
+      couponDiscount = applied.discount_amount;
+      appliedCouponId = applied.user_coupon_id;
+    } catch (err) {
+      await cancelOrder(deps.admin, placed.order_id, "Coupon rejected");
+      throw err;
+    }
+  }
+
+  /*
    * Free local delivery, applied to the rate place_order just computed.
    *
    * It has to happen HERE, before the payment is prepared, because the payment
@@ -172,9 +221,15 @@ async function createCheckout(
    * sets total = subtotal + shipping_cost — but if it ever grows another term
    * (the admin order path already has a discount column), recomputing here
    * would silently drop it. A delta cannot.
+   *
+   * `couponDiscount` is that same idea applied to the coupon: place_order knows
+   * nothing about it, so its total still includes the full subtotal.
    */
-  const total = placed.total - (placed.shipping_cost - shipping.cost);
+  const total =
+    placed.total - couponDiscount - (placed.shipping_cost - shipping.cost);
 
+  // (The coupon needs no write here: apply_order_coupon already stored the
+  // discounted total. Only the shipping override has to be written back.)
   if (shipping.localDeliveryApplied && shipping.cost !== placed.shipping_cost) {
     try {
       await setShippingTotals(deps.admin, placed.order_id, shipping.cost, total);
@@ -222,6 +277,8 @@ async function createCheckout(
     order_number: placed.order_number,
     subtotal: placed.subtotal,
     shipping_cost: shipping.cost,
+    discount: couponDiscount,
+    user_coupon_id: appliedCouponId,
     total,
     item_count: placed.item_count,
     order_token: signOrderToken(placed.order_id),
@@ -272,7 +329,13 @@ async function updateCheckout(
     input.shipping.local_delivery
   );
   const shippingCost = shipping.cost;
-  const total = order.subtotal + shippingCost;
+  // The coupon was fixed when this order was created (changing it takes the
+  // cancel-and-replace path above), so its discount is carried, not recomputed.
+  // Shipping is still priced on the pre-discount subtotal, exactly as
+  // place_order priced it — a coupon never pushes a customer under a
+  // free-shipping threshold they had already reached.
+  const discount = order.discount ?? 0;
+  const total = order.subtotal - discount + shippingCost;
 
   const ctx: PaymentContext = {
     order_id: order.id,
@@ -315,6 +378,8 @@ async function updateCheckout(
     order_number: order.order_number,
     subtotal: order.subtotal,
     shipping_cost: shippingCost,
+    discount,
+    user_coupon_id: order.user_coupon_id ?? null,
     total,
     item_count: order.items.reduce((sum, item) => sum + item.quantity, 0),
     order_token: signOrderToken(order.id),

@@ -49,11 +49,11 @@ describe("getTopRanking", () => {
 
     expect(result.status).toBe("ok");
     expect(result.status === "ok" && result.entries.map((e) => e.rank)).toEqual([
-      "Parfum",
-      "EDP",
-      "EDT",
-      "Cologne",
-      "Fraiche",
+      "Maestro",
+      "Alquimista",
+      "Conocedor",
+      "Coleccionista",
+      "Aficionado",
     ]);
   });
 
@@ -98,7 +98,7 @@ describe("getTopRanking", () => {
       position: 1,
       username: "aurora",
       experiencePoints: 2_400,
-      rank: "Cologne",
+      rank: "Coleccionista",
     });
   });
 

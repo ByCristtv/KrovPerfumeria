@@ -95,9 +95,9 @@ describe("ReceivedRequestsPanel", () => {
     });
 
     it("shows the rank the sender's XP implies, from the shared ladder", () => {
-      // 1,200 XP is Cologne per lib/rank.ts.
+      // 1,200 XP is Coleccionista per lib/rank.ts.
       setup({ requests: [request({ experiencePoints: 1200 })] });
-      expect(screen.getByText("Cologne")).toBeInTheDocument();
+      expect(screen.getByText("Coleccionista")).toBeInTheDocument();
       expect(screen.getByText("1,200 XP")).toBeInTheDocument();
     });
 

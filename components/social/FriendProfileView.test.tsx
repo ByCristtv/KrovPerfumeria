@@ -90,14 +90,14 @@ describe("FriendProfileView", () => {
         screen.getByRole("heading", { name: "aurora" })
       ).toBeInTheDocument();
       expect(screen.getByText("Aurora Vega")).toBeInTheDocument();
-      // 5,200 XP is EDT on the one ladder in lib/rank.ts.
-      expect(screen.getByText("EDT")).toBeInTheDocument();
+      // 5,200 XP is Conocedor on the one ladder in lib/rank.ts.
+      expect(screen.getByText("Conocedor")).toBeInTheDocument();
       expect(screen.getByText(/5,200 XP/)).toBeInTheDocument();
     });
 
     it("derives rank from XP rather than reading a stored field", () => {
       setup({ profile: profile({ experiencePoints: 18_000 }) });
-      expect(screen.getByText("Parfum")).toBeInTheDocument();
+      expect(screen.getByText("Maestro")).toBeInTheDocument();
     });
 
     it("omits the full name line when the friend has none", () => {
@@ -207,10 +207,10 @@ describe("FriendProfileView", () => {
         { profile: profile() },
         { fragrances: [fragrance({ imageUrl: null })] }
       );
-      expect(container.querySelector("img")).toHaveAttribute(
-        "src",
-        "/placeholder.png"
-      );
+      // The header's rank badge is also an <img>, so match by src.
+      expect(
+        container.querySelector('img[src="/placeholder.png"]')
+      ).toBeInTheDocument();
     });
 
     it("keeps the product image out of the accessibility tree", () => {

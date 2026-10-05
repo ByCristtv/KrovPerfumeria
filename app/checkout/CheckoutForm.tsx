@@ -19,12 +19,19 @@ interface CheckoutFormProps {
   form: UseFormReturn<CheckoutFormValues>;
   onSubmit: (values: CheckoutFormValues) => void | Promise<void>;
   isSubmitting?: boolean;
+  /**
+   * Rendered between the payment method and the pay button — where a customer
+   * looks for "do I have a discount?" just before committing. A slot rather than
+   * a built-in section so this form stays free of coupon state.
+   */
+  couponSlot?: React.ReactNode;
 }
 
 export default function CheckoutForm({
   form,
   onSubmit,
   isSubmitting,
+  couponSlot,
 }: CheckoutFormProps) {
   const {
     register,
@@ -349,6 +356,9 @@ export default function CheckoutForm({
           }
         />
       </Section>
+
+      {/* ──────── Cupón ──────── */}
+      {couponSlot}
 
       {/* ──────── Submit ──────── */}
       <button

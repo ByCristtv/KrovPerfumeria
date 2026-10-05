@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { getRankFromXP } from "@/lib/rank";
 import { formatXp } from "@/lib/format";
 import { NEUTRAL_RING, RANK_STYLES } from "@/lib/social/rankStyle";
+import RankBadge from "@/components/rank/RankBadge";
 
 /**
  * The shared surface of the /friends portal.
@@ -154,7 +155,7 @@ export function SocialHandle({ children }: { children: ReactNode }) {
 }
 
 /**
- * Rank + XP as one compact semi-transparent pill. The rank comes from
+ * Rank badge + name + XP as one compact semi-transparent pill. The rank comes from
  * `getRankFromXP`, the same ladder the leaderboard and the profile use — there
  * is no second ladder and nothing stored.
  */
@@ -163,8 +164,9 @@ export function SocialRankPill({ xp }: { xp: number }) {
 
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.14em] ${RANK_STYLES[rank].pill}`}
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border py-0.5 pl-1 pr-2.5 text-[10px] uppercase tracking-[0.14em] ${RANK_STYLES[rank].pill}`}
     >
+      <RankBadge rank={rank} size="xs" decorative />
       <span className="font-medium">{rank}</span>
       <span aria-hidden className="opacity-40">
         ·

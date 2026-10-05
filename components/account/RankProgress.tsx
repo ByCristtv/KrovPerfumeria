@@ -1,5 +1,6 @@
 import { getRankInfo } from "@/lib/rank";
 import { formatXp } from "@/lib/format";
+import RankBadge from "@/components/rank/RankBadge";
 
 interface RankProgressProps {
   experiencePoints: number;
@@ -27,14 +28,17 @@ export default function RankProgress({ experiencePoints }: RankProgressProps) {
   return (
     <div>
       <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-white/45">Rango actual</p>
-          <p
-            className="mt-2 inline-flex items-center rounded-full border border-krov-blood/40 bg-krov-blood/[0.08] px-3.5 py-1 text-lg leading-snug text-krov-rose"
-            style={{ fontFamily: serif }}
-          >
-            {info.currentRank}
-          </p>
+        <div className="flex min-w-0 items-center gap-3.5">
+          <RankBadge rank={info.currentRank} size="lg" decorative eager />
+          <div className="min-w-0">
+            <p className="text-xs text-white/45">Rango actual</p>
+            <p
+              className="mt-2 inline-flex items-center rounded-full border border-krov-blood/40 bg-krov-blood/8 px-3.5 py-1 text-lg leading-snug text-krov-rose"
+              style={{ fontFamily: serif }}
+            >
+              {info.currentRank}
+            </p>
+          </div>
         </div>
         <p className="shrink-0 text-sm tabular-nums text-white">
           {formatXp(info.currentXP)}
@@ -53,7 +57,7 @@ export default function RankProgress({ experiencePoints }: RankProgressProps) {
         aria-label={`Progreso en el rango ${info.currentRank}`}
       >
         <div
-          className="krov-bar-fill h-full rounded-full bg-gradient-to-r from-krov-blood/70 to-krov-blood"
+          className="krov-bar-fill h-full rounded-full bg-linear-to-r from-krov-blood/70 to-krov-blood"
           style={{ width: `${percent}%` }}
         />
       </div>

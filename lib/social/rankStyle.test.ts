@@ -11,19 +11,19 @@ describe("RANK_STYLES", () => {
 
   it("reserves gold for the top two tiers", () => {
     const gold = (rank: keyof typeof RANK_STYLES) => RANK_STYLES[rank].ring.includes("#e0b24a");
-    expect(gold("EDP")).toBe(true);
-    expect(gold("Parfum")).toBe(true);
-    expect(gold("Fraiche")).toBe(false);
-    expect(gold("Cologne")).toBe(false);
-    expect(gold("EDT")).toBe(false);
+    expect(gold("Alquimista")).toBe(true);
+    expect(gold("Maestro")).toBe(true);
+    expect(gold("Aficionado")).toBe(false);
+    expect(gold("Coleccionista")).toBe(false);
+    expect(gold("Conocedor")).toBe(false);
   });
 
   it("gives only the highest tier a glow", () => {
-    expect(RANK_STYLES.Parfum.glow).not.toBe("");
-    expect(RANK_STYLES.EDP.glow).toBe("");
+    expect(RANK_STYLES.Maestro.glow).not.toBe("");
+    expect(RANK_STYLES.Alquimista.glow).toBe("");
   });
 
   it("uses the lowest tier's ring when the rank is unknown", () => {
-    expect(NEUTRAL_RING).toBe(RANK_STYLES.Fraiche.ring);
+    expect(NEUTRAL_RING).toBe(RANK_STYLES.Aficionado.ring);
   });
 });

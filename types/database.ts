@@ -223,6 +223,62 @@ export type Database = {
           },
         ]
       }
+      coupons: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean
+          level_required: number
+          max_discount_amount: number | null
+          min_order_subtotal: number
+          name: string
+          updated_at: string
+          valid_days: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          id?: string
+          is_active?: boolean
+          level_required: number
+          max_discount_amount?: number | null
+          min_order_subtotal?: number
+          name: string
+          updated_at?: string
+          valid_days?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean
+          level_required?: number
+          max_discount_amount?: number | null
+          min_order_subtotal?: number
+          name?: string
+          updated_at?: string
+          valid_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_level_required_fkey"
+            columns: ["level_required"]
+            isOneToOne: false
+            referencedRelation: "levels"
+            referencedColumns: ["level_number"]
+          },
+        ]
+      }
       decant_transformations: {
         Row: {
           created_at: string
@@ -366,6 +422,30 @@ export type Database = {
           },
         ]
       }
+      levels: {
+        Row: {
+          created_at: string
+          level_number: number
+          name: string
+          required_xp: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          level_number: number
+          name: string
+          required_xp: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          level_number?: number
+          name?: string
+          required_xp?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           brand_name: string
@@ -507,6 +587,7 @@ export type Database = {
           tax: number
           total: number
           updated_at: string
+          user_coupon_id: string | null
           user_id: string | null
         }
         Insert: {
@@ -539,6 +620,7 @@ export type Database = {
           tax?: number
           total: number
           updated_at?: string
+          user_coupon_id?: string | null
           user_id?: string | null
         }
         Update: {
@@ -571,6 +653,7 @@ export type Database = {
           tax?: number
           total?: number
           updated_at?: string
+          user_coupon_id?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -579,6 +662,13 @@ export type Database = {
             columns: ["created_by_admin_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_coupon_id_fkey"
+            columns: ["user_coupon_id"]
+            isOneToOne: true
+            referencedRelation: "user_coupons"
             referencedColumns: ["id"]
           },
           {
@@ -1042,6 +1132,73 @@ export type Database = {
           },
         ]
       }
+      user_coupons: {
+        Row: {
+          claimed_at: string | null
+          coupon_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          payment_confirmed_at: string | null
+          status: string
+          unlocked_at: string
+          updated_at: string
+          used_at: string | null
+          used_order_id: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          coupon_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payment_confirmed_at?: string | null
+          status?: string
+          unlocked_at?: string
+          updated_at?: string
+          used_at?: string | null
+          used_order_id?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          coupon_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payment_confirmed_at?: string | null
+          status?: string
+          unlocked_at?: string
+          updated_at?: string
+          used_at?: string | null
+          used_order_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_coupons_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_coupons_used_order_id_fkey"
+            columns: ["used_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_coupons_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wholesale_profiles: {
         Row: {
           application_status: string
@@ -1201,6 +1358,10 @@ export type Database = {
           total_units: number
         }[]
       }
+      apply_order_coupon: {
+        Args: { p_order_id: string; p_user_coupon_id: string }
+        Returns: Json
+      }
       backfill_admin_order_links: {
         Args: never
         Returns: {
@@ -1215,6 +1376,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      backfill_level_coupons: { Args: never; Returns: number }
       calculate_shipping_cost: {
         Args: { p_canton_code: string; p_subtotal: number }
         Returns: Json
@@ -1238,6 +1400,7 @@ export type Database = {
         Args: { p_order_id: string; p_type: string }
         Returns: string
       }
+      claim_user_coupon: { Args: { p_user_coupon_id: string }; Returns: Json }
       create_new_product: {
         Args: {
           p_brand_id: string
@@ -1272,6 +1435,7 @@ export type Database = {
         Args: { p_order_id: string; p_reason: string }
         Returns: Json
       }
+      expire_user_coupons: { Args: never; Returns: number }
       finalize_order_notification: {
         Args: {
           p_error_message?: string
@@ -1344,6 +1508,7 @@ export type Database = {
           username: string
         }[]
       }
+      grant_level_coupons: { Args: { p_user_id: string }; Returns: number }
       grant_order_xp: { Args: { p_order_id: string }; Returns: Json }
       increase_decant_pool: {
         Args: {
@@ -1372,6 +1537,7 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
+      release_order_coupon: { Args: { p_order_id: string }; Returns: boolean }
       remove_friend: { Args: { p_friend_user_id: string }; Returns: boolean }
       restore_variant_stock: { Args: { p_order_id: string }; Returns: Json }
       review_wholesale_application: {

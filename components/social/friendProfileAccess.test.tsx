@@ -113,7 +113,7 @@ describe("friend profile access", () => {
         await screen.findByRole("heading", { name: "aurora" })
       ).toBeInTheDocument();
       expect(await screen.findByText("Hawas Ice")).toBeInTheDocument();
-      expect(screen.getByText("EDT")).toBeInTheDocument();
+      expect(screen.getByText("Conocedor")).toBeInTheDocument();
     });
 
     it("asks the database on every visit rather than trusting a cache", async () => {

@@ -10,6 +10,11 @@ import {
  * What each rank actually BUYS the customer — the redeemable side of the XP
  * ladder that lib/rank.ts models.
  *
+ * These are the terms the customer is TOLD about. The coupons they can actually
+ * spend live in the database (`coupons`, seeded by migration 20261005000100) and
+ * are priced there — keep the percentages and the minimum below in step with that
+ * seed.
+ *
  * Deliberately a separate module from `lib/rank.ts`:
  *
  *   - rank.ts answers "which tier is this XP in?" — pure progression maths, used
@@ -23,10 +28,7 @@ import {
  */
 
 /** Minimum order value (CRC) a discount reward can be applied to. */
-export const REWARD_MIN_PURCHASE = 25_000;
-
-/** Ceiling (CRC) on the fragrance a Parfum member may claim for free. */
-export const FREE_FRAGRANCE_MAX_VALUE = 25_000;
+export const REWARD_MIN_PURCHASE = 20_000;
 
 /**
  * The shape of a reward, as structure rather than prose.
@@ -35,7 +37,7 @@ export const FREE_FRAGRANCE_MAX_VALUE = 25_000;
  * {@link describeReward}, so the numbers in the copy cannot drift from the
  * numbers any future redemption logic would enforce.
  */
-export type RewardKind = "none" | "discount" | "free_fragrance";
+export type RewardKind = "none" | "discount";
 
 export interface RankReward {
   kind: RewardKind;
@@ -43,15 +45,12 @@ export interface RankReward {
   discountPercent: number | null;
   /** Minimum purchase the reward requires, or null when it has no floor. */
   minPurchase: number | null;
-  /** Value ceiling on a claimed item. Only set for "free_fragrance". */
-  maxValue: number | null;
 }
 
 const NO_REWARD: RankReward = {
   kind: "none",
   discountPercent: null,
   minPurchase: null,
-  maxValue: null,
 };
 
 /** A percentage discount gated behind {@link REWARD_MIN_PURCHASE}. */
@@ -60,7 +59,6 @@ function discount(percent: number): RankReward {
     kind: "discount",
     discountPercent: percent,
     minPurchase: REWARD_MIN_PURCHASE,
-    maxValue: null,
   };
 }
 
@@ -70,16 +68,11 @@ function discount(percent: number): RankReward {
  * an `undefined` that reaches the UI.
  */
 export const RANK_REWARDS: Readonly<Record<UserRank, RankReward>> = {
-  Fraiche: NO_REWARD,
-  Cologne: discount(5),
-  EDT: discount(8),
-  EDP: discount(12),
-  Parfum: {
-    kind: "free_fragrance",
-    discountPercent: null,
-    minPurchase: null,
-    maxValue: FREE_FRAGRANCE_MAX_VALUE,
-  },
+  Aficionado: NO_REWARD,
+  Coleccionista: discount(5),
+  Conocedor: discount(8),
+  Alquimista: discount(12),
+  Maestro: discount(18),
 } as const;
 
 /** The reward a given rank unlocks. */
@@ -92,8 +85,6 @@ export function summarizeReward(reward: RankReward): string {
   switch (reward.kind) {
     case "discount":
       return `${reward.discountPercent}% de descuento`;
-    case "free_fragrance":
-      return "1 fragancia gratis";
     case "none":
       return "Sin recompensa";
   }
@@ -103,12 +94,8 @@ export function summarizeReward(reward: RankReward): string {
 export function describeReward(reward: RankReward): string {
   switch (reward.kind) {
     case "discount":
-      return `${reward.discountPercent}% de descuento en tu próxima compra superior a ${formatPrice(
+      return `Cupón de ${reward.discountPercent}% de descuento, de un solo uso, en una compra mínima de ${formatPrice(
         reward.minPurchase ?? REWARD_MIN_PURCHASE
-      )}.`;
-    case "free_fragrance":
-      return `Reclama 1 fragancia gratis con valor menor a ${formatPrice(
-        reward.maxValue ?? FREE_FRAGRANCE_MAX_VALUE
       )}.`;
     case "none":
       return "Este es el punto de partida: todavía no hay recompensa para reclamar.";

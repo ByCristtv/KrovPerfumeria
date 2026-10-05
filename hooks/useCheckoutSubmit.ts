@@ -16,6 +16,10 @@ export interface CheckoutSubmitResponse {
   order_number: number;
   subtotal: number;
   shipping_cost: number;
+  /** Coupon reduction included in `total`; 0 when none. */
+  discount: number;
+  /** The coupon the order now holds, or null. */
+  user_coupon_id: string | null;
   total: number;
   item_count: number;
   /**

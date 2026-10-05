@@ -14,6 +14,7 @@ import PurchasedFragrances, {
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useFriendProfile, useFriendPurchases } from "@/hooks/useFriendProfile";
 import { getRankFromXP } from "@/lib/rank";
+import RankBadge from "@/components/rank/RankBadge";
 import { socialDisplayName } from "@/lib/social/display";
 import { formatXp } from "@/lib/format";
 
@@ -171,13 +172,16 @@ function ProfileHeader({
           <p className="mt-1.5 truncate text-sm text-krov-ash">{fullName}</p>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
-          <span className="border border-krov-blood/50 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-krov-rose">
-            {rank}
-          </span>
-          <span className="text-xs tabular-nums text-krov-dust">
-            {formatXp(experiencePoints)} XP
-          </span>
+        <div className="mt-4 flex items-center justify-center gap-3 sm:justify-start">
+          <RankBadge rank={rank} size="lg" decorative eager />
+          <div className="flex flex-col items-start gap-1.5 text-left">
+            <span className="border border-krov-blood/50 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-krov-rose">
+              {rank}
+            </span>
+            <span className="text-xs tabular-nums text-krov-dust">
+              {formatXp(experiencePoints)} XP
+            </span>
+          </div>
         </div>
       </div>
     </header>
@@ -217,7 +221,7 @@ function FriendProfileHeaderSkeleton() {
         <div className="w-full max-w-xs">
           <div className="h-8 w-48 max-w-full rounded bg-white/5" />
           <div className="mt-3 h-3.5 w-32 rounded bg-white/5" />
-          <div className="mt-5 h-6 w-40 rounded bg-white/5" />
+          <div className="mt-5 h-16 w-40 rounded bg-white/5" />
         </div>
       </div>
       <div className="mt-14 h-3 w-40 rounded bg-white/5" />

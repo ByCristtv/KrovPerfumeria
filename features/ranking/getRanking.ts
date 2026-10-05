@@ -19,7 +19,7 @@ import {
  * nothing here drops rows: a row that arrives is a row that opted in, because
  * the function cannot return any other kind. The only work done client-side is
  * turning XP into a rank name, which reuses `getRankFromXP` so the leaderboard
- * and the profile page can never disagree about what "EDP" means.
+ * and the profile page can never disagree about what "Alquimista" means.
  */
 export async function getTopRanking(
   limit: number = RANKING_TOP_COUNT

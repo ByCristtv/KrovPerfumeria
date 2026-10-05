@@ -208,6 +208,15 @@ export const checkoutPayloadSchema = z.object({
     .max(500, { message: "Notas demasiado largas" })
     .optional(),
   payment_method: paymentMethodSchema,
+  /**
+   * The level coupon the customer picked (a user_coupons id). An intent only: the
+   * server never takes a discount amount from the client — apply_order_coupon
+   * re-checks ownership, status and minimum, and computes the amount itself.
+   */
+  user_coupon_id: z
+    .string()
+    .uuid({ message: "user_coupon_id debe ser un UUID válido" })
+    .nullish(),
   session: checkoutSessionSchema.optional(),
 });
 
@@ -267,6 +276,8 @@ export interface CheckoutPayload {
   }>;
   notes?: string;
   payment_method: PaymentMethod;
+  /** Chosen level coupon, or null/omitted for none. See the schema note. */
+  user_coupon_id?: string | null;
   /**
    * Omitted on the first submit; set once the checkout has a pending order, which
    * makes every later submit update that order instead of creating another.
@@ -293,7 +304,8 @@ export interface CheckoutPayload {
 export function buildCheckoutPayload(
   formValues: CheckoutFormValues,
   cartItems: CartLineItem[],
-  session?: CheckoutPayload["session"]
+  session?: CheckoutPayload["session"],
+  userCouponId?: string | null
 ): CheckoutPayload {
   const canton = findCanton(formValues.shipping.canton_code);
   if (!canton) {
@@ -331,6 +343,7 @@ export function buildCheckoutPayload(
     })),
     notes: optional(formValues.notes),
     payment_method: formValues.payment_method,
+    user_coupon_id: userCouponId ?? null,
     ...(session && { session }),
   };
 }

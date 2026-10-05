@@ -38,7 +38,7 @@ describe("RankingBoard", () => {
 
   it("shows exact XP against the next rank threshold", () => {
     render(<RankingBoard entries={full} />);
-    // alfredo: EDP (10,000) heading for Parfum (18,000)
+    // alfredo: Alquimista (10,000) heading for Maestro (18,000)
     expect(screen.getByText(/12,000 XP/)).toBeInTheDocument();
     expect(screen.getByText(/\/ 18,000/)).toBeInTheDocument();
   });

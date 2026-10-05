@@ -91,8 +91,8 @@ describe("FriendsList", () => {
     it("shows the rank pill derived from XP, with the XP beside it", () => {
       setup({ friends: [friend({ experiencePoints: 5200 })] });
 
-      // 5,200 XP sits in EDT per lib/rank.ts — the one ladder in the codebase.
-      expect(screen.getByText("EDT")).toBeInTheDocument();
+      // 5,200 XP sits in Conocedor per lib/rank.ts — the one ladder in the codebase.
+      expect(screen.getByText("Conocedor")).toBeInTheDocument();
       expect(screen.getByText("5,200 XP")).toBeInTheDocument();
     });
 

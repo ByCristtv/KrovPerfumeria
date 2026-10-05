@@ -3,12 +3,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import Swal from "sweetalert2";
 import CheckoutForm from "./CheckoutForm";
 import OnvoPaymentElement from "./OnvoPaymentElement";
 import OrderSummary from "./OrderSummary";
+import CheckoutCouponSelector from "@/components/coupons/CheckoutCouponSelector";
 import { useCart } from "@/hooks/useCart";
+import { useCartPricing } from "@/hooks/useCartPricing";
+import {
+  clearStoredCheckoutCoupon,
+  useCheckoutCoupon,
+} from "@/hooks/useCheckoutCoupon";
 import { useCheckoutExit } from "@/hooks/useCheckoutExit";
 import {
   useCheckoutSession,
@@ -56,6 +63,17 @@ export default function CheckoutClient() {
   const submit = useCheckoutSubmit();
   const { session, save, clear } = useCheckoutSession();
   const { exit, hasExited } = useCheckoutExit();
+  const queryClient = useQueryClient();
+
+  // The level coupon. Judged against the same wholesale-aware subtotal the
+  // summary shows, so "this coupon no longer fits" and the number on screen can
+  // never disagree. `session.order_id` lets the coupon our OWN pending order is
+  // holding stay selectable after a refresh.
+  const { pricing } = useCartPricing(cart);
+  const coupon = useCheckoutCoupon({
+    subtotal: pricing.subtotal,
+    currentOrderId: session?.order_id ?? null,
+  });
 
   // Phase 2 iff we hold a session with a prepared card payment. "Editar" drops
   // this without dropping the session — that's the whole point.
@@ -136,11 +154,17 @@ export default function CheckoutClient() {
     exit(destination, () => {
       clear();
       clearCart();
+      // The checkout is over: the next one starts without yesterday's coupon.
+      clearStoredCheckoutCoupon();
     });
   };
 
   const onSuccess = (result: CheckoutSubmitResponse) => {
     retriedRef.current = false;
+
+    // Placing the order spent the coupon (or handed the previous one back), so
+    // the cached list is stale the moment this lands.
+    void queryClient.invalidateQueries({ queryKey: ["coupons", "mine"] });
 
     // `payment: null` means nothing payment-relevant changed — keep the
     // preparation we already hold so the mounted SDK survives the edit.
@@ -186,6 +210,22 @@ export default function CheckoutClient() {
       return;
     }
 
+    // The server refused the coupon (below its minimum, spent in another tab,
+    // expired). The order was never placed and nothing was charged, so this is
+    // recoverable in place: drop the coupon, refresh the list, and let the
+    // customer pay without it or pick another.
+    if (error.code.startsWith("coupon_")) {
+      coupon.clear();
+      void queryClient.invalidateQueries({ queryKey: ["coupons", "mine"] });
+      await Swal.fire({
+        icon: "warning",
+        title: "No pudimos aplicar tu cupón",
+        text: error.message,
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
     // Stock/availability issues are recoverable by editing the cart; everything
     // else is just "try again".
     const isStockIssue =
@@ -210,7 +250,7 @@ export default function CheckoutClient() {
   ) => {
     let payload;
     try {
-      payload = buildCheckoutPayload(values, cart, ref);
+      payload = buildCheckoutPayload(values, cart, ref, coupon.selectedId);
     } catch (err) {
       // buildCheckoutPayload only throws on a canton_code outside the CR-geo
       // dataset, which the form schema already prevents — defensive only.
@@ -268,6 +308,12 @@ export default function CheckoutClient() {
           form={form}
           onSubmit={handleSubmit}
           isSubmitting={form.formState.isSubmitting || submit.isPending}
+          couponSlot={
+            <CheckoutCouponSelector
+              state={coupon}
+              disabled={submit.isPending}
+            />
+          }
         />
       )}
       {/* The summary needs the whole address, not just the cantón: free local
@@ -276,6 +322,8 @@ export default function CheckoutClient() {
         cantonCode={watchedCantonCode || undefined}
         district={watchedDistrict}
         localDelivery={watchedLocalDelivery}
+        couponDiscount={coupon.discount}
+        couponName={coupon.selected?.coupon.coupon.name}
       />
     </div>
   );
