@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  NOINDEX_FOLLOW,
+  buildPageMetadata,
+  truncateDescription,
+} from "@/lib/seo/metadata";
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
 
@@ -67,11 +72,18 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { doc } = await params;
   const data = DOCS[doc];
-  return {
-    title: data
-      ? `${data.title} · KROV Perfumería`
-      : "Documento no encontrado · KROV Perfumería",
-  };
+  if (!data) {
+    return { title: "Documento no encontrado", robots: NOINDEX_FOLLOW };
+  }
+
+  // The root title template already appends the brand — repeating it here
+  // produced "… · KROV Perfumería · KROV Perfumería". Each document also gets
+  // its own canonical and description (it used to inherit the home page's).
+  return buildPageMetadata({
+    title: data.title,
+    description: truncateDescription(data.intro),
+    path: `/legal/${doc}`,
+  });
 }
 
 export default async function LegalPage({

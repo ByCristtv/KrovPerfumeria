@@ -6,22 +6,41 @@ import {
   parseCatalogPage,
   type RawSearchParams,
 } from "@/lib/catalogParams";
+import { catalogSeo } from "@/lib/seo/catalog";
+import { LANDING_LIST } from "@/lib/seo/landings";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 import CatalogHero from "@/components/catalog/CatalogHero";
 import CatalogToolbar from "@/components/catalog/CatalogToolbar";
-import ProductGrid from "@/components/catalog/ProductGrid";
-import CatalogPagination from "@/components/catalog/CatalogPagination";
-import CatalogEmptyState from "@/components/catalog/CatalogEmptyState";
-
-export const metadata: Metadata = {
-  alternates: { canonical: "/products" },
-  title: "Catálogo",
-  description:
-    "Explora la colección completa de KROV Perfumería: perfumes nicho, diseñadores de lujo y decants originales. Filtra por categoría, tipo y precio.",
-};
+import CatalogResults from "@/components/catalog/CatalogResults";
+import CatalogLinks from "@/components/catalog/CatalogLinks";
 
 interface ProductsPageProps {
   // Next.js 16: searchParams is async.
   searchParams: Promise<RawSearchParams>;
+}
+
+/**
+ * The catalog is one route with an unbounded set of URLs (search, category,
+ * type, sort, page). Plain pages index and canonicalise to themselves; any
+ * narrowed or re-ordered view is `noindex, follow` — see lib/seo/catalog.ts.
+ */
+export async function generateMetadata({
+  searchParams,
+}: ProductsPageProps): Promise<Metadata> {
+  const seo = catalogSeo("/products", await searchParams);
+
+  return buildPageMetadata({
+    title:
+      seo.page > 1
+        ? `Catálogo de perfumes originales en Costa Rica – Página ${seo.page}`
+        : "Catálogo de perfumes originales en Costa Rica",
+    description:
+      seo.page > 1
+        ? `Página ${seo.page} del catálogo de KROV Perfumería: perfumes originales, perfumes árabes y decants con envío a todo Costa Rica.`
+        : "Explora el catálogo de KROV Perfumería: perfumes originales, perfumes árabes y decants con envío a todo Costa Rica. Filtra por categoría, tipo y precio.",
+    path: seo.canonicalPath,
+    robots: seo.robots,
+  });
 }
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
@@ -31,15 +50,6 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
   const result = await getCatalogPage(page, filters);
   const filtered = hasActiveFilters(filters);
-
-  const from =
-    result.totalProducts === 0
-      ? 0
-      : (result.currentPage - 1) * result.pageSize + 1;
-  const to = Math.min(
-    result.currentPage * result.pageSize,
-    result.totalProducts
-  );
 
   return (
     <div className="relative min-h-screen bg-krov-void">
@@ -54,29 +64,16 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         <div className="mx-auto max-w-7xl px-5 pb-24 sm:px-8">
           <CatalogToolbar filters={filters} />
 
-          {result.products.length === 0 ? (
-            <CatalogEmptyState filtered={filtered} />
-          ) : (
-            <>
-              {/* Result count doubles as the rule that closes the toolbar and
-                  opens the grid, so the page has one seam here instead of two. */}
-              <div className="mb-8 mt-10 flex items-center gap-5">
-                <p className="shrink-0 text-[10px] uppercase tracking-[0.24em] text-krov-dust">
-                  {from}–{to} de {result.totalProducts}
-                </p>
-                <span aria-hidden className="krov-rule h-px flex-1" />
-              </div>
+          <CatalogResults result={result} filtered={filtered} />
 
-              <ProductGrid products={result.products} />
-
-              <CatalogPagination
-                currentPage={result.currentPage}
-                totalPages={result.totalPages}
-                hasNextPage={result.hasNextPage}
-                hasPreviousPage={result.hasPreviousPage}
-              />
-            </>
-          )}
+          <CatalogLinks
+            heading="Explora por categoría"
+            text="Descubre una selección de perfumes árabes originales, o prueba una fragancia antes de comprar el frasco completo con los decants."
+            links={LANDING_LIST.map((landing) => ({
+              href: landing.path,
+              label: landing.navLabel,
+            }))}
+          />
         </div>
       </div>
     </div>

@@ -1,60 +1,38 @@
 import type { MetadataRoute } from "next";
-import { supabase } from "@/lib/supabase/client";
-import { absoluteUrl } from "@/lib/seo/site";
+import { getLandingCatalog } from "@/features/products/getLandingCatalog";
+import { getSitemapProducts } from "@/features/products/getSitemapProducts";
+import { LANDING_LIST } from "@/lib/seo/landings";
+import { buildSitemapEntries } from "@/lib/seo/sitemap";
 
 /**
  * Served at /sitemap.xml.
  *
  * Regenerated hourly rather than pinned at build time so newly published
- * products appear without a redeploy.
+ * products appear without a redeploy. The inclusion rules live in
+ * lib/seo/sitemap.ts; this file only gathers the data.
  */
 export const revalidate = 3600;
 
-/** Static, indexable routes. Private areas are excluded by construction. */
-const STATIC_ROUTES: Array<{
-  path: string;
-  changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
-  priority: number;
-}> = [
-  { path: "/", changeFrequency: "daily", priority: 1 },
-  { path: "/products", changeFrequency: "daily", priority: 0.9 },
-  { path: "/ranking", changeFrequency: "daily", priority: 0.5 },
-  { path: "/howtobuy", changeFrequency: "monthly", priority: 0.5 },
-  { path: "/legal/privacidad", changeFrequency: "yearly", priority: 0.2 },
-  { path: "/legal/terminos", changeFrequency: "yearly", priority: 0.2 },
-];
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
+  // A landing is submitted only while it lists at least one product — the same
+  // condition under which its own page is indexable (see landingMetadata).
+  const [products, landingTotals] = await Promise.all([
+    getSitemapProducts(),
+    Promise.all(
+      LANDING_LIST.map(async (landing) => ({
+        path: landing.path,
+        total: (await getLandingCatalog(landing.slug, 1)).totalProducts,
+      }))
+    ),
+  ]);
 
-  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
-    url: absoluteUrl(route.path),
-    lastModified: now,
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }));
-
-  // Only active products — listing a 404 wastes crawl budget and erodes trust
-  // in the sitemap as a whole.
-  const { data, error } = await supabase
-    .from("products")
-    .select("slug, updated_at")
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false });
-
-  if (error) {
-    // A partial sitemap beats a 500. The static routes still get submitted and
-    // products remain discoverable via internal links from /products.
-    console.error("[sitemap] product fetch failed", error);
-    return staticEntries;
-  }
-
-  const productEntries: MetadataRoute.Sitemap = (data ?? []).map((product) => ({
-    url: absoluteUrl(`/products/${product.slug}`),
-    lastModified: new Date(product.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
-
-  return [...staticEntries, ...productEntries];
+  // A partial sitemap beats a 500: if the product query failed, the static and
+  // landing routes are still submitted and products stay discoverable through
+  // the internal links on /products.
+  return buildSitemapEntries({
+    products: products ?? [],
+    landingPaths: landingTotals
+      .filter((landing) => landing.total > 0)
+      .map((landing) => landing.path),
+  });
 }

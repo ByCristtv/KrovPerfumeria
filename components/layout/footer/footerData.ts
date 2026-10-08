@@ -1,4 +1,5 @@
 import { CONTACT } from "@/components/contact/contactData";
+import { LANDING_LIST } from "@/lib/seo/landings";
 
 /**
  * Single source of truth for footer content.
@@ -35,8 +36,14 @@ type FooterLink = { label: string; href: string };
 
 // ---- Column 2 — Tienda ----
 // Links map to real destinations; filter-backed ones use catalog query params.
+// The curated landings (árabes, decants) are linked from here so every page of
+// the site passes a crawlable, descriptive link to them.
 export const SHOP_LINKS: FooterLink[] = [
   { label: "La colección", href: "/products" },
+  ...LANDING_LIST.map((landing) => ({
+    label: landing.navLabel,
+    href: landing.path,
+  })),
   { label: "Recién llegados", href: "/" },
 ];
 

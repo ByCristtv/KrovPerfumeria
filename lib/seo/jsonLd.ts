@@ -1,11 +1,18 @@
+import { FOOTER_CONTACT, PAYMENT_METHODS } from "@/components/layout/footer/footerData";
 import { SITE, absoluteUrl, getSiteUrl } from "./site";
 
 /**
  * JSON-LD builders for schema.org structured data.
  *
- * Structured data is what turns a plain blue link into a rich result — price,
- * availability and rating shown directly in Google. For an e-commerce site the
- * Product graph is the single highest-value SEO addition, and none existed here.
+ * Structured data is what turns a plain blue link into a rich result — price
+ * and availability shown directly in Google. Rules every builder here follows:
+ *
+ *  - It describes only what the page visibly shows. No ratings, reviews,
+ *    GTINs or shipping promises are emitted because none exist in the data.
+ *  - Money is CRC, availability comes from the same stock rule the storefront
+ *    uses, and every URL is absolute and canonical.
+ *  - One node per entity per page. The Organization/WebSite pair is emitted by
+ *    the root layout; pages reference the organization by `@id`.
  *
  * Everything returns a plain object; render it with `<JsonLd data={...} />`.
  */
@@ -13,104 +20,148 @@ import { SITE, absoluteUrl, getSiteUrl } from "./site";
 /** Loosely typed JSON-LD node — schema.org shapes are open-ended by design. */
 export type JsonLdNode = Record<string, unknown>;
 
-/** Identity of the business itself. Emitted once, site-wide. */
+const organizationId = () => `${getSiteUrl()}/#organization`;
+
+/** "+506 7143 4066" (as shown in the footer) → "+50671434066". */
+function toE164(display: string): string {
+  return display.replace(/[^\d+]/g, "");
+}
+
+/**
+ * Identity of the business itself. Emitted once, site-wide.
+ *
+ * `OnlineStore` is the subtype Google recommends for e-commerce. It is
+ * deliberately NOT a `LocalBusiness`: there is no published street address or
+ * opening hours to back one, and the address below is locality-level only.
+ */
 export function organizationSchema(): JsonLdNode {
   return {
     "@context": "https://schema.org",
-    "@type": "Store",
-    "@id": `${getSiteUrl()}/#organization`,
+    "@type": "OnlineStore",
+    "@id": organizationId(),
     name: SITE.name,
+    alternateName: SITE.shortName,
     description: SITE.description,
     url: getSiteUrl(),
+    logo: absoluteUrl(SITE.logoPath),
     image: absoluteUrl("/opengraph-image"),
+    telephone: toE164(FOOTER_CONTACT.whatsappDisplay),
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: SITE.address.locality,
+      addressRegion: SITE.address.region,
+      addressCountry: SITE.country,
+    },
     areaServed: { "@type": "Country", name: "Costa Rica" },
-    address: { "@type": "PostalAddress", addressCountry: SITE.country },
+    currenciesAccepted: SITE.currency,
+    paymentAccepted: PAYMENT_METHODS.join(", "),
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer service",
+      telephone: toE164(FOOTER_CONTACT.whatsappDisplay),
+      availableLanguage: "es",
+      areaServed: SITE.country,
+    },
     // Links the site to its verified social profiles — helps entity resolution.
-    sameAs: [
-      SITE.social.instagram,
-      SITE.social.facebook,
-      SITE.social.tiktok,
-    ],
+    sameAs: [SITE.social.instagram, SITE.social.facebook, SITE.social.tiktok],
   };
 }
 
-/** Site-level node that enables the sitelinks search box. */
+/**
+ * Site-level node. `name` + `alternateName` feed Google's site-name display.
+ * The sitelinks search box (`SearchAction`) is intentionally absent: Google
+ * retired that feature, so the markup would only be dead weight.
+ */
 export function webSiteSchema(): JsonLdNode {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "@id": `${getSiteUrl()}/#website`,
     name: SITE.name,
+    alternateName: SITE.shortName,
     url: getSiteUrl(),
     inLanguage: SITE.lang,
-    publisher: { "@id": `${getSiteUrl()}/#organization` },
-    potentialAction: {
-      "@type": "SearchAction",
-      target: {
-        "@type": "EntryPoint",
-        urlTemplate: absoluteUrl("/products?q={search_term_string}"),
-      },
-      "query-input": "required name=search_term_string",
-    },
+    publisher: { "@id": organizationId() },
   };
 }
 
-export interface ProductOfferInput {
+export interface ProductVariantSchemaInput {
   sku: string;
+  /** Variant-specific name, e.g. "Lion 100 ml". */
+  name: string;
+  /** Presentation size as the selector shows it, e.g. "100 ml". */
+  size: string;
+  /** What is charged today (offer price when the offer is live), in CRC. */
   price: number;
-  /** Whether this variant can actually be bought right now. */
+  /** Whether the variant can be bought right now (decant-aware). */
   inStock: boolean;
-  /** Human label for the variant, e.g. "100 ml". */
-  name?: string;
 }
 
-export interface ProductSchemaInput {
+export interface ProductGroupSchemaInput {
+  /** Stable id of the parent product. */
+  id: string;
   name: string;
   slug: string;
   description?: string | null;
   brand?: string | null;
   images: string[];
-  offers: ProductOfferInput[];
+  variants: ProductVariantSchemaInput[];
 }
 
 /**
- * Product schema with an `AggregateOffer` across variants.
+ * A perfume sold in several sizes is a `ProductGroup` whose variants each carry
+ * their own `Offer` — the structure Google documents for merchant listings.
+ * (`AggregateOffer` is only accepted for plain product snippets, and a price
+ * range with a single availability flag can't say that the 5 ml decant is in
+ * stock while the 100 ml bottle is not.)
  *
- * Google requires `offers` to be present and internally consistent with the
- * visible page — the low/high range is computed from the real variant prices
- * rather than hardcoded, so it can't drift when pricing changes.
+ * All variants share one canonical URL: the size is chosen on the page, and
+ * `?variant=` is a preselection of that same document, not a separate page.
  */
-export function productSchema(input: ProductSchemaInput): JsonLdNode {
+export function productGroupSchema(input: ProductGroupSchemaInput): JsonLdNode {
   const url = absoluteUrl(`/products/${input.slug}`);
-  const prices = input.offers.map((o) => o.price);
-  const anyInStock = input.offers.some((o) => o.inStock);
+  const brand = input.brand
+    ? { "@type": "Brand", name: input.brand }
+    : undefined;
+  const image = input.images.length > 0 ? input.images : undefined;
 
   return {
     "@context": "https://schema.org",
-    "@type": "Product",
+    "@type": "ProductGroup",
     "@id": `${url}#product`,
     name: input.name,
     description: input.description ?? undefined,
-    image: input.images.length > 0 ? input.images : undefined,
     url,
-    ...(input.brand && {
-      brand: { "@type": "Brand", name: input.brand },
-    }),
-    offers: {
-      "@type": "AggregateOffer",
-      priceCurrency: SITE.currency,
-      lowPrice: Math.min(...prices),
-      highPrice: Math.max(...prices),
-      offerCount: input.offers.length,
-      availability: anyInStock
-        ? "https://schema.org/InStock"
-        : "https://schema.org/OutOfStock",
-      seller: { "@id": `${getSiteUrl()}/#organization` },
-    },
+    image,
+    brand,
+    productGroupID: input.id,
+    variesBy: ["https://schema.org/size"],
+    hasVariant: input.variants.map((variant) => ({
+      "@type": "Product",
+      sku: variant.sku,
+      name: variant.name,
+      size: variant.size,
+      url,
+      image,
+      brand,
+      offers: {
+        "@type": "Offer",
+        url,
+        priceCurrency: SITE.currency,
+        price: variant.price,
+        availability: variant.inStock
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+        seller: { "@id": organizationId() },
+      },
+    })),
   };
 }
 
-/** Breadcrumb trail — renders the hierarchy under the SERP title. */
+/**
+ * Breadcrumb trail. The names must mirror the breadcrumb the page actually
+ * renders — Google compares them.
+ */
 export function breadcrumbSchema(
   crumbs: Array<{ name: string; path: string }>
 ): JsonLdNode {

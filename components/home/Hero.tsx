@@ -38,14 +38,35 @@ const fadeUp = {
  */
 export default function Hero() {
   const [current, setCurrent] = useState(0);
+  // Slides 2–4 are not mounted until the page has finished loading. They sit at
+  // opacity 0, but `next/image` still fetches any image inside the viewport —
+  // so all four AVIFs (~2.3 MB of source) used to race the first one, which is
+  // the LCP element. Deferring them leaves the whole connection to slide 1.
+  const [slidesReady, setSlidesReady] = useState(false);
 
   useEffect(() => {
+    let timer: number | undefined;
+    const arm = () => {
+      timer = window.setTimeout(() => setSlidesReady(true), 1500);
+    };
+
+    if (document.readyState === "complete") arm();
+    else window.addEventListener("load", arm, { once: true });
+
+    return () => {
+      window.removeEventListener("load", arm);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!slidesReady) return;
     const interval = setInterval(
       () => setCurrent((prev) => (prev + 1) % images.length),
       6500
     );
     return () => clearInterval(interval);
-  }, []);
+  }, [slidesReady]);
 
   return (
     <section className="relative flex h-screen min-h-160 w-full items-center overflow-hidden bg-krov-void">
@@ -54,23 +75,25 @@ export default function Hero() {
           reads as atmosphere rather than as a product shot. The images carry
           mood; the type carries the message. */}
       <div className="absolute inset-0">
-        {images.map((img, index) => (
-          <Image
-            key={img}
-            src={img}
-            alt=""
-            fill
-            priority={index === 0}
-            aria-hidden
-            sizes="100vw"
-            className={`absolute inset-0 object-cover transition-[opacity,transform] duration-[4000ms] ease-out ${
-              index === current
-                ? "scale-105 opacity-100"
-                : "scale-100 opacity-0"
-            }`}
-            style={{ filter: "saturate(0.55) contrast(1.05) brightness(0.62)" }}
-          />
-        ))}
+        {images.map((img, index) =>
+          index > 0 && !slidesReady ? null : (
+            <Image
+              key={img}
+              src={img}
+              alt=""
+              fill
+              priority={index === 0}
+              aria-hidden
+              sizes="100vw"
+              className={`absolute inset-0 object-cover transition-[opacity,transform] duration-[4000ms] ease-out ${
+                index === current
+                  ? "scale-105 opacity-100"
+                  : "scale-100 opacity-0"
+              }`}
+              style={{ filter: "saturate(0.55) contrast(1.05) brightness(0.62)" }}
+            />
+          )
+        )}
 
         {/* Wine wash — the colour of the brand laid over the light of the photo,
             not painted on top of it. `multiply` keeps the highlights alive
@@ -140,7 +163,7 @@ export default function Hero() {
             variants={fadeUp}
             className="mt-8 max-w-md text-[0.95rem] leading-relaxed text-krov-ash md:text-base"
           >
-            Encuentra decants, sets y perfumes originales al mejor precio y acumala puntos de experiencia.
+            Encuentra perfumes originales, perfumes árabes y decants en Costa Rica, al mejor precio, y acumula puntos de experiencia.
           </motion.p>
 
           <motion.div

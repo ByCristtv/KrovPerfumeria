@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+// Relative import on purpose: the config file can't resolve the `@/` alias.
+import { NOINDEX_PATHS } from "./lib/seo/privatePaths";
 
 /**
  * Hostname of the Supabase project the app is currently pointed at. The
@@ -42,6 +44,20 @@ const nextConfig: NextConfig = {
       },
       
     ],
+  },
+
+  /**
+   * Safety net against accidental indexing: every private prefix answers with
+   * `X-Robots-Tag: noindex, nofollow`, whatever its page metadata says. It
+   * covers route handlers and any page nobody remembered to annotate, and — unlike
+   * robots.txt — it is an indexing directive, not a crawl hint. Per-page
+   * `robots` metadata stays as the visible, second signal.
+   */
+  async headers() {
+    return NOINDEX_PATHS.map((prefix) => ({
+      source: `${prefix}/:path*`,
+      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+    }));
   },
 
   /**

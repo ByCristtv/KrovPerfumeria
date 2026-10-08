@@ -1,7 +1,5 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-import { serif } from "./styles";
 import { useReveal } from "@/hooks/useReveal";
 
 /**
@@ -31,11 +29,14 @@ export default function HowToBuyHero() {
       />
 
       <div ref={ref} className="reveal relative mx-auto max-w-3xl">
-        <p
+        {/* The page's only heading. It is the existing eyebrow line promoted to
+            <h1> with the same classes: the page had no heading at all, and a
+            visible redesign of this hero is the owner's call, not an SEO fix. */}
+        <h1
           className="reveal reveal-d1 mb-6 text-xs uppercase tracking-[0.4em] text-krov-rose md:text-sm"
         >
           Guía de compra · KROV Perfumería
-        </p>
+        </h1>
 
       </div>
     </section>

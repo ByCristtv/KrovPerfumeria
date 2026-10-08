@@ -7,7 +7,19 @@ import Diferenciadores from "@/components/about/Diferenciadores";
 import ArteDecant from "@/components/about/ArteDecant";
 import ContactMethods from "@/components/contact/ContactMethods";
 import FAQAccordion from "@/components/contact/FAQAccordion";
+import LocalDelivery from "@/components/home/LocalDelivery";
 import Reveal from "@/components/ui/Reveal";
+import { buildPageMetadata } from "@/lib/seo/metadata";
+import { SITE } from "@/lib/seo/site";
+
+// The home page is the one route that owns the "/" canonical (the root layout
+// no longer sets one, or every page without its own would claim to be home).
+export const metadata = buildPageMetadata({
+  title: SITE.homeTitle,
+  absoluteTitle: true,
+  description: SITE.description,
+  path: "/",
+});
 
 // Revalidate the homepage teaser every 5 minutes (ISR) so new arrivals
 // surface without a redeploy, while keeping render cost off the request path.
@@ -45,6 +57,7 @@ export default function Home() {
       <Reveal>
         <ArteDecant />
       </Reveal>
+      <LocalDelivery />
 
       {/*
         The two contact sections were authored for the narrow editorial column

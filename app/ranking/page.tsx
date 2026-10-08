@@ -6,14 +6,15 @@ import RankingBoard, {
   RankingErrorState,
 } from "@/components/ranking/RankingBoard";
 import RewardsRoadmapSection from "@/components/ranking/RewardsRoadmapSection";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 import { RANKING_TOP_COUNT } from "@/types/ranking";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/ranking" },
+export const metadata: Metadata = buildPageMetadata({
   title: "Ranking y Premios",
   description:
     "Los 10 clientes con más experiencia en KROV Perfumería, y la ruta de premios de cada rango. Gana XP con cada pedido recibido y sube de rango.",
-};
+  path: "/ranking",
+});
 
 /**
  * The board is identical for every visitor, so it is cached and re-read at most

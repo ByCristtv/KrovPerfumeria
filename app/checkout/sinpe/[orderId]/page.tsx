@@ -7,8 +7,11 @@ import { verifyOrderToken } from "@/lib/orders/tokens";
 import { getSinpeEnv } from "@/lib/sinpe/env";
 import { formatPrice } from "@/lib/format";
 import { CONTACT } from "@/components/contact/contactData";
+import { NOINDEX_NOFOLLOW } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = {
+  // Per-order payment instructions: private, never for a crawler.
+  robots: NOINDEX_NOFOLLOW,
   title: "Paga con SINPE Móvil",
   description: "Instrucciones para completar tu pedido con SINPE Móvil.",
 };

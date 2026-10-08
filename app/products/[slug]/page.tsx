@@ -4,9 +4,16 @@ import { getProductBySlug } from "@/features/products/getProductBySlug";
 import { getRelatedProducts } from "@/features/products/getRelatedProducts";
 import ProductDetailView from "@/components/product/detail/ProductDetailView";
 import JsonLd from "@/components/seo/JsonLd";
-import { breadcrumbSchema, productSchema } from "@/lib/seo/jsonLd";
-import { SITE } from "@/lib/seo/site";
-import type { ProductDetailData } from "@/types/product";
+import { breadcrumbSchema, productGroupSchema } from "@/lib/seo/jsonLd";
+import { NOINDEX_FOLLOW, buildPageMetadata } from "@/lib/seo/metadata";
+import {
+  isListableProduct,
+  productDescription,
+  productImages,
+  productPath,
+  productSchemaInput,
+  productTitle,
+} from "@/lib/seo/product";
 
 interface ProductPageProps {
   // Next.js 16: params/searchParams are async.
@@ -14,68 +21,30 @@ interface ProductPageProps {
   searchParams: Promise<{ variant?: string }>;
 }
 
-/** Meta descriptions are truncated around 160 chars; end on a word boundary. */
-function toMetaDescription(text: string, max = 160): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length <= max) return clean;
-  const cut = clean.slice(0, max);
-  return `${cut.slice(0, cut.lastIndexOf(" "))}…`;
-}
-
-function describeProduct(product: ProductDetailData): string {
-  const brand = product.brands?.name ?? "";
-  if (product.description) return toMetaDescription(product.description);
-
-  return toMetaDescription(
-    `${brand} ${product.name} — ${product.concentration}. Fragancia original disponible en ${SITE.name}, con envío a todo Costa Rica.`
-  );
-}
-
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
+  // Same request-scoped `cache` as the page body: one query serves both.
   const product = await getProductBySlug(slug);
 
-  if (!product) {
-    // Keep the 404 out of the index.
-    return {
-      title: "Producto no encontrado",
-      robots: { index: false, follow: true },
-    };
+  // A product without a sellable variant renders the 404 page, so its metadata
+  // must say noindex too — otherwise the 404 ships with a contradictory
+  // `index` signal.
+  if (!isListableProduct(product)) {
+    return { title: "Producto no encontrado", robots: NOINDEX_FOLLOW };
   }
 
-  const brand = product.brands?.name ?? "";
-  const title = `${product.name}${brand ? ` · ${brand}` : ""}`;
-  const description = describeProduct(product);
-  const images = product.product_images
-    .slice(0, 4)
-    .map((image) => image.url)
-    .filter(Boolean);
-  const canonical = `/products/${product.slug}`;
-
-  return {
-    title,
-    description,
-    // Variant selection uses ?variant=… — without an explicit canonical each
-    // variant URL would be indexed as a separate, near-duplicate page.
-    alternates: { canonical },
-    openGraph: {
-      type: "website",
-      url: canonical,
-      title,
-      description,
-      siteName: SITE.name,
-      locale: SITE.locale,
-      images: images.length > 0 ? images : undefined,
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: images.length > 0 ? images : undefined,
-    },
-  };
+  // Every metadata field derives from the product row, so title, description,
+  // images and the price teaser follow the database with no extra bookkeeping.
+  // The canonical carries no query string: `?variant=` only preselects a size
+  // on this same document and must not be indexed as a separate page.
+  return buildPageMetadata({
+    title: productTitle(product),
+    description: productDescription(product),
+    path: productPath(product.slug),
+    images: productImages(product, 4),
+  });
 }
 
 export default async function ProductPage({
@@ -86,7 +55,7 @@ export default async function ProductPage({
   const { variant: initialVariantId } = await searchParams;
   const product = await getProductBySlug(slug);
 
-  if (!product || product.product_variants.length === 0) {
+  if (!isListableProduct(product)) {
     notFound();
   }
 
@@ -96,35 +65,22 @@ export default async function ProductPage({
     4
   );
 
-  // Prices mirror what the page actually charges: an offer price wins when the
-  // offer is live. Structured data that disagrees with the visible price is a
-  // manual-action risk, not just a missed opportunity.
-  const offers = product.product_variants.map((variant) => ({
-    sku: variant.id,
-    price:
-      variant.is_on_offer && variant.offer_price != null
-        ? variant.offer_price
-        : variant.price,
-    inStock: variant.stock > 0,
-    name: `${variant.size_ml} ml`,
-  }));
-
   return (
     <>
+      {/*
+        Structured data is built from the same helpers the page renders with
+        (lib/seo/product.ts → lib/stock.ts), so a price or availability that
+        disagrees with the visible page — a manual-action risk, not just a
+        missed rich result — can't be introduced here. The breadcrumb names
+        mirror the visible trail in ProductDetailView.
+      */}
       <JsonLd
         data={[
-          productSchema({
-            name: product.name,
-            slug: product.slug,
-            description: product.description,
-            brand: product.brands?.name ?? null,
-            images: product.product_images.map((image) => image.url),
-            offers,
-          }),
+          productGroupSchema(productSchemaInput(product)),
           breadcrumbSchema([
-            { name: "Inicio", path: "/" },
-            { name: "Catálogo", path: "/products" },
-            { name: product.name, path: `/products/${product.slug}` },
+            { name: "KROV", path: "/" },
+            { name: "Colección", path: "/products" },
+            { name: product.name, path: productPath(product.slug) },
           ]),
         ]}
       />

@@ -55,7 +55,7 @@ export const metadata: Metadata = {
 
   title: {
     // Page titles become "Catálogo · KROV Perfumería" automatically.
-    default: `${SITE.name} — Perfumes originales en Costa Rica`,
+    default: SITE.homeTitle,
     template: `%s · ${SITE.name}`,
   },
   description: SITE.description,
@@ -65,24 +65,36 @@ export const metadata: Metadata = {
     shortcut: "/KrovIcon.png",
   },
 
-  // Home page is the canonical root; every other route sets its own.
-  alternates: { canonical: "/" },
+  /*
+   * Deliberately NO `alternates.canonical` and NO `openGraph.url` here.
+   *
+   * Next merges metadata shallowly, so any route that doesn't set its own
+   * `alternates`/`openGraph` inherits the parent's object. A root canonical of
+   * "/" made every such route — /legal/*, for one — declare the HOME PAGE as its
+   * canonical, and a root og:url of "/" made every shared link point at home.
+   * Each indexable page now sets both through buildPageMetadata
+   * (lib/seo/metadata.ts); pages that don't (private ones) are noindexed.
+   */
 
   /*
-   * Deliberately NO `title`/`description` here.
+   * Deliberately NO `title`/`description` in openGraph either.
    *
    * Child routes inherit the parent's `openGraph` object wholesale, so pinning a
-   * title at the root made every page share the generic one — /about and
-   * /howtobuy were advertising the home page when shared. Omitting it lets Next
-   * fall back to each route's own `title`/`description`, while siteName, locale
-   * and type still inherit as intended.
+   * title at the root made every page share the generic one. Omitting it lets
+   * Next fall back to each route's own `title`/`description`, while siteName,
+   * locale and type still inherit as intended.
    */
   openGraph: {
     type: "website",
     siteName: SITE.name,
     locale: SITE.locale,
-    url: "/",
   },
+
+  // Google Search Console HTML-tag verification. Only emitted when the env var
+  // is set; a DNS-verified Domain property needs nothing here.
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION && {
+    verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION },
+  }),
 
   twitter: {
     card: "summary_large_image",

@@ -1,11 +1,16 @@
+import { cache } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { ProductDetailData } from "@/types/product";
 
 /**
  * Fetch a single product by slug for the public detail page.
  * Returns null when missing/inactive — callers should `notFound()`.
+ *
+ * Wrapped in React `cache`: the route calls this from both `generateMetadata`
+ * and the page body, and without it each request hit the database twice for the
+ * identical row. Within one server render the second call is a memo hit.
  */
-export async function getProductBySlug(
+export const getProductBySlug = cache(async function getProductBySlug(
   slug: string
 ): Promise<ProductDetailData | null> {
   const { data, error } = await supabase
@@ -49,4 +54,4 @@ export async function getProductBySlug(
   }
 
   return data as unknown as ProductDetailData | null;
-}
+});

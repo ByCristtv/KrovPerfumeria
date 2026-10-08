@@ -24,9 +24,12 @@ export default function RankingLoading() {
       <div className="relative mx-auto max-w-3xl px-5 pt-28 pb-24 sm:px-8 md:pt-36">
         <header className="text-center">
           <p className="krov-eyebrow mb-5">Ranking y Premios</p>
-          <h1 className="krov-display text-4xl text-krov-bone md:text-6xl">
+          {/* Not a heading: this skeleton is streamed as the Suspense fallback, so
+              a real <h1> here lands in the page's initial HTML next to the real
+              one. Same look; the page itself owns the <h1>. */}
+          <p className="krov-display text-4xl text-krov-bone md:text-6xl">
             Top {RANKING_TOP_COUNT}
-          </h1>
+          </p>
           <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-krov-ash">
             Las {RANKING_TOP_COUNT} personas con más experiencia. Se gana XP con
             cada pedido recibido, y el rango sale de ese total.

@@ -32,7 +32,7 @@ export default function CatalogLoading() {
       <LoadingAnnouncement label="Cargando el catálogo…" />
 
       <div className="relative">
-        <CatalogHero />
+        <CatalogHero asHeading={false} />
 
         <div className="mx-auto max-w-7xl px-5 pb-24 sm:px-8">
           {/* Toolbar: the real glass shell, not a bone — it is chrome the user
