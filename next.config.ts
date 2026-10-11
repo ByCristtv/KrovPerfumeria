@@ -45,6 +45,7 @@ const nextConfig: NextConfig = {
       
     ],
   },
+  serverExternalPackages: ["sharp"],
 
   /**
    * Safety net against accidental indexing: every private prefix answers with
