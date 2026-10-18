@@ -9,6 +9,7 @@ import AuthListener from "@/components/auth/AuthListener";
 import JsonLd from "@/components/seo/JsonLd";
 import { organizationSchema, webSiteSchema } from "@/lib/seo/jsonLd";
 import { SITE, getSiteUrl } from "@/lib/seo/site";
+import { Analytics } from '@vercel/analytics/next';
 
 /**
  * ── KROV typography ─────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ export default function RootLayout({
             <Footer />
           </FooterGate>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );
