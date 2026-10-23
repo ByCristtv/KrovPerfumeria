@@ -87,7 +87,7 @@ export default function OrdersTable({ orders }: Props) {
 // Badges + formatting
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, [string, string]> = {
     pending: ["Pendiente", "bg-amber-500/20 text-amber-200"],
     received: ["Recibido", "bg-blue-500/20 text-blue-200"],
@@ -104,7 +104,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function PaymentBadge({ status }: { status: string }) {
+export function PaymentBadge({ status }: { status: string }) {
   const map: Record<string, [string, string]> = {
     pending: ["Pendiente", "bg-amber-500/20 text-amber-200"],
     paid: ["Pagado", "bg-emerald-500/20 text-emerald-200"],

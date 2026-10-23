@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   graphql_public: {
     Tables: {
@@ -952,6 +952,54 @@ export type Database = {
           },
         ]
       }
+      profile_xp_adjustments: {
+        Row: {
+          balance_after: number
+          balance_before: number
+          created_at: string
+          created_by: string | null
+          delta: number
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          balance_after: number
+          balance_before: number
+          created_at?: string
+          created_by?: string | null
+          delta: number
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          balance_after?: number
+          balance_before?: number
+          created_at?: string
+          created_by?: string | null
+          delta?: number
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_xp_adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_xp_adjustments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1246,6 +1294,10 @@ export type Database = {
     }
     Functions: {
       accept_friend_request: { Args: { p_request_id: string }; Returns: string }
+      admin_adjust_customer_xp: {
+        Args: { p_delta: number; p_reason?: string; p_user_id: string }
+        Returns: Json
+      }
       admin_find_customer_by_email: {
         Args: { p_email: string }
         Returns: {

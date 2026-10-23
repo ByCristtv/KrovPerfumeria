@@ -103,6 +103,32 @@ export interface ProductCardData {
   }[];
 }
 
+/**
+ * One slide of the homepage offers carousel. Built server-side from a variant
+ * that is on offer, active, in stock and carries a VALID promotional price
+ * (`0 < offer_price < price`) — see `features/products/getFeaturedOffers.ts`.
+ * One entry per parent product.
+ */
+export interface FeaturedOffer {
+  productId: string;
+  variantId: string;
+  name: string;
+  brand: string | null;
+  description: string | null;
+  productType: ProductTypes;
+  sizeMl: number;
+  /** Regular retail price (struck through). */
+  price: number;
+  /** Promotional price the customer pays — always lower than `price`. */
+  offerPrice: number;
+  /** Whole-percent saving; `null` when it would round to 0. */
+  discountPercent: number | null;
+  imageUrl: string;
+  imageAlt: string;
+  /** Product detail route with this variant preselected. */
+  href: string;
+}
+
 /** Payload for the admin "create product + first variant" RPC. */
 export interface CreateProductDTO {
   // Base product

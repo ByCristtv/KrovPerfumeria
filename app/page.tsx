@@ -11,6 +11,7 @@ import LocalDelivery from "@/components/home/LocalDelivery";
 import Reveal from "@/components/ui/Reveal";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { SITE } from "@/lib/seo/site";
+import { getFeaturedOffers } from "@/features/products/getFeaturedOffers";
 
 // The home page is the one route that owns the "/" canonical (the root layout
 // no longer sets one, or every page without its own would claim to be home).
@@ -40,10 +41,15 @@ export const revalidate = 300;
  * ready to be told why the brand is called what it is; a visitor who is told
  * first is being lectured before they have any reason to care.
  */
-export default function Home() {
+export default async function Home() {
+  // Products on offer drive the hero carousel. Fetched here (not in the client
+  // hero) so slides are in the server HTML and refresh with the page's ISR
+  // window; any failure yields [] and the hero falls back to its plain layout.
+  const offers = await getFeaturedOffers();
+
   return (
     <>
-      <Hero />
+      <Hero offers={offers} />
       <TrustIndicators />
       <FeaturedCollection />
       <Identity />

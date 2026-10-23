@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/types/database";
+import type { ProfileSelfUpdate } from "@/lib/profile/editableColumns";
 
 export type ProfileRow = Tables<"profiles">;
 export type AddressRow = Tables<"addresses">;
@@ -80,7 +81,7 @@ export async function getAccountOrders(
 export async function updatePhone(userId: string, phone: string) {
   const { error } = await supabase
     .from("profiles")
-    .update({ phone })
+    .update({ phone } satisfies ProfileSelfUpdate)
     .eq("id", userId);
   if (error) throw error;
 }

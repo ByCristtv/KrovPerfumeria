@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import OffersCarousel from "@/components/home/OffersCarousel";
+import type { FeaturedOffer } from "@/types/product";
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
 
@@ -35,8 +37,19 @@ const fadeUp = {
  * Nothing here draws blood literally. The reference lives in a single word set
  * in italic Didone, a red horizon low in the frame, and the deep wine wash over
  * the photography. The visitor is meant to work the meaning out, not be shown it.
+ *
+ * When products are on offer (fetched server-side, see `getFeaturedOffers`),
+ * the hero becomes a two-part composition: the statement keeps the h1 and the
+ * CTAs, and the offers carousel takes the right column on desktop — or sits
+ * between the claim and the CTAs on phones, so a promotional price is on screen
+ * without scrolling. The background photography then holds on its first frame:
+ * two things rotating at once would compete, and the offers are what should
+ * move. With no offers the hero renders exactly as it always has.
  */
-export default function Hero() {
+export default function Hero({ offers = [] }: { offers?: FeaturedOffer[] }) {
+  const hasOffers = offers.length > 0;
+  const rotatePhotos = !hasOffers;
+
   const [current, setCurrent] = useState(0);
   // Slides 2–4 are not mounted until the page has finished loading. They sit at
   // opacity 0, but `next/image` still fetches any image inside the viewport —
@@ -45,6 +58,8 @@ export default function Hero() {
   const [slidesReady, setSlidesReady] = useState(false);
 
   useEffect(() => {
+    // With offers on screen the photography is static — never mount the rest.
+    if (!rotatePhotos) return;
     let timer: number | undefined;
     const arm = () => {
       timer = window.setTimeout(() => setSlidesReady(true), 1500);
@@ -57,19 +72,27 @@ export default function Hero() {
       window.removeEventListener("load", arm);
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [rotatePhotos]);
 
   useEffect(() => {
-    if (!slidesReady) return;
+    if (!slidesReady || !rotatePhotos) return;
     const interval = setInterval(
       () => setCurrent((prev) => (prev + 1) % images.length),
       6500
     );
     return () => clearInterval(interval);
-  }, [slidesReady]);
+  }, [slidesReady, rotatePhotos]);
 
   return (
-    <section className="relative flex h-screen min-h-160 w-full items-center overflow-hidden bg-krov-void">
+    <section
+      className={`relative flex w-full items-center overflow-hidden bg-krov-void ${
+        hasOffers
+          ? // Content-height on phones (claim + offer + CTAs must not be
+            // squeezed into a fixed 100vh), a full frame from desktop up.
+            "min-h-svh pb-12 pt-24 lg:min-h-screen lg:pb-16 lg:pt-28"
+          : "h-screen min-h-160"
+      }`}
+    >
       {/* ── Photography ─────────────────────────────────────────────────────
           Held far back: desaturated, dimmed and pushed under a wine wash so it
           reads as atmosphere rather than as a product shot. The images carry
@@ -129,16 +152,24 @@ export default function Hero() {
       {/* ── Statement ───────────────────────────────────────────────────────
           Left-aligned on an editorial measure. Centred hero type is the single
           most template-looking decision available; an off-centre column with a
-          hard left margin is what separates a house from a store. */}
+          hard left margin is what separates a house from a store.
+
+          With offers it is a grid: one column on phones in reading order
+          (claim → offer → CTAs); from `lg` the claim and CTAs share the left
+          column and the carousel spans both rows on the right. */}
       <motion.div
         variants={{
           show: { transition: { staggerChildren: 0.13, delayChildren: 0.15 } },
         }}
         initial="hidden"
         animate="show"
-        className="relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-10"
+        className={`relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-10 ${
+          hasOffers
+            ? "grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-x-14 xl:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] xl:gap-x-20"
+            : ""
+        }`}
       >
-        <div className="max-w-2xl">
+        <div className={hasOffers ? "max-w-2xl lg:col-start-1 lg:row-start-1 lg:self-end" : "max-w-2xl"}>
           {/* The etymology, stated once, quietly. This is the only place the
               Cyrillic appears — it rewards attention instead of demanding it. */}
           <motion.p
@@ -151,7 +182,9 @@ export default function Hero() {
 
           <motion.h1
             variants={fadeUp}
-            className="mt-7 text-[2.75rem] leading-[0.95] text-krov-bone sm:text-6xl md:text-[5.25rem]"
+            className={`text-[2.75rem] leading-[0.95] text-krov-bone sm:text-6xl ${
+              hasOffers ? "mt-5 md:mt-7 lg:text-[4.5rem] xl:text-[5.25rem]" : "mt-7 md:text-[5.25rem]"
+            }`}
             style={{ fontFamily: serif }}
           >
             Tu perfume
@@ -161,34 +194,50 @@ export default function Hero() {
 
           <motion.p
             variants={fadeUp}
-            className="mt-8 max-w-md text-[0.95rem] leading-relaxed text-krov-ash md:text-base"
+            className={`max-w-md text-[0.95rem] leading-relaxed text-krov-ash md:text-base ${
+              hasOffers ? "mt-5 md:mt-8" : "mt-8"
+            }`}
           >
             Encuentra perfumes originales, perfumes árabes y decants en Costa Rica, al mejor precio, y acumula puntos de experiencia.
           </motion.p>
+        </div>
 
+        {hasOffers && (
           <motion.div
             variants={fadeUp}
-            className="mt-11 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
+            className="mt-8 w-full max-w-xl lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:max-w-none lg:self-center"
           >
-            <Link
-              href="/products"
-              className="krov-btn-primary group justify-center"
-            >
-              Ver la colección
-              <ArrowRight
-                size={14}
-                aria-hidden
-                className="transition-transform duration-500 group-hover:translate-x-1"
-              />
-            </Link>
-            <Link
-              href="/howtobuy"
-              className="krov-btn-outline justify-center"
-            >
-              Cómo comprar
-            </Link>
+            <OffersCarousel offers={offers} />
           </motion.div>
-        </div>
+        )}
+
+        <motion.div
+          variants={fadeUp}
+          className={`flex flex-col items-stretch gap-3 sm:flex-row sm:items-center ${
+            hasOffers ? "mt-8 lg:col-start-1 lg:row-start-2 lg:mt-11 lg:self-start" : "mt-11"
+          }`}
+        >
+          {/* With offers, the carousel's "Ver oferta" is the one solid red
+              button in the frame; the catalogue route steps down to outline so
+              two red slabs don't compete a thumb's width apart on a phone. */}
+          <Link
+            href="/products"
+            className={`group justify-center ${hasOffers ? "krov-btn-outline" : "krov-btn-primary"}`}
+          >
+            Ver la colección
+            <ArrowRight
+              size={14}
+              aria-hidden
+              className="transition-transform duration-500 group-hover:translate-x-1"
+            />
+          </Link>
+          <Link
+            href="/howtobuy"
+            className={`justify-center ${hasOffers ? "krov-btn-ghost min-h-11" : "krov-btn-outline"}`}
+          >
+            Cómo comprar
+          </Link>
+        </motion.div>
       </motion.div>
 
       {/* ── Horizon ─────────────────────────────────────────────────────────

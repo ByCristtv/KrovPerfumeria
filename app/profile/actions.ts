@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { setSocialProfileVisibility } from "@/lib/social/visibilityRpc";
+import type { ProfileSelfUpdate } from "@/lib/profile/editableColumns";
 import { rankingSettingsSchema, type RankingSettingsFormValues } from "@/schemas/ranking";
 import type { ActionResult } from "@/types/action";
 
@@ -77,7 +78,7 @@ export async function updateRankingSettingsAction(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ username, show_in_ranking })
+    .update({ username, show_in_ranking } satisfies ProfileSelfUpdate)
     .eq("id", user.id);
 
   if (error) {

@@ -8,6 +8,7 @@ import {
   Tags,
   Store,
   Gift,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
@@ -43,6 +44,13 @@ const SECTIONS: AdminSection[] = [
     description:
       "Gestiona los pedidos pendientes: envíos, actualizaciones de estado y soporte al cliente.",
     Icon: ClipboardList,
+  },
+  {
+    href: "/admin/clientes",
+    title: "Clientes",
+    description:
+      "Consulta a tus clientes registrados, su XP, su rango y su historial de pedidos. Ajusta su XP cuando haga falta.",
+    Icon: Users,
   },
   {
     href: "/admin/brands",

@@ -14,6 +14,7 @@ import {
   userAvatarFolder,
 } from "@/lib/avatar/paths";
 import { claimAvatarUploadSlot } from "@/lib/avatar/rateLimit";
+import type { ProfileSelfUpdate } from "@/lib/profile/editableColumns";
 
 /**
  * POST /api/profile/avatar   (multipart/form-data, field `avatar`)
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
   const publicUrl = bucket.getPublicUrl(path).data.publicUrl;
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ avatar_url: publicUrl })
+    .update({ avatar_url: publicUrl } satisfies ProfileSelfUpdate)
     .eq("id", user.id);
   if (updateError) {
     console.error("[avatar] profile update failed", updateError);
