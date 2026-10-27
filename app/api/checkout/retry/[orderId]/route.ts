@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { OnvoApiError, createCheckoutSession } from "@/lib/onvo/client";
-import { signOrderToken, verifyOrderToken } from "@/lib/orders/tokens";
+import { verifyOrderToken } from "@/lib/orders/tokens";
 
 /**
  * POST /api/checkout/retry/[orderId]
  *
- * Generates a fresh Onvo checkout session for an existing pending order.
+ * HOSTED RETRY IS DISABLED (2026-10-26). This route used to mint an Onvo
+ * hosted checkout session and overwrite orders.payment_reference with the
+ * SESSION id. The webhook now only accepts a payment whose intent id IS the
+ * order's persisted payment_reference (20261025000100), and a hosted session's
+ * intent id is never known to us — so a retry paid here would charge the
+ * customer without ever confirming the order (the order #144 failure mode).
+ * The guards below still answer accurately; a payable order gets a 410 telling
+ * the customer to contact us. Re-enable only together with a way to persist
+ * the session's payment intent id.
  *
  * Used by:
  *   - "Reintentar pago" button on /orders/[id] (shown when ?cancelled=1)
@@ -24,9 +31,6 @@ import { signOrderToken, verifyOrderToken } from "@/lib/orders/tokens";
  *   - Age < 25 min — sweep cancels at 30 min; 5-min buffer prevents the race
  *     where a retry session is paid AFTER sweep has already denied the order.
  *     The webhook handler also guards against this case in defense-in-depth.
- *
- * The order_items, totals, address are all reused — only the Onvo
- * payment_reference is replaced with the new session id.
  */
 export async function POST(
   request: NextRequest,
@@ -108,76 +112,18 @@ export async function POST(
     );
   }
 
-  // ──────── Create new Onvo session ────────
-  let sessionId: string;
-  let paymentUrl: string;
-  try {
-    const freshToken = signOrderToken(orderId);
-    const appOrigin = resolveAppOrigin(request);
-
-    const session = await createCheckoutSession({
-      lineItems: [
-        {
-          quantity: 1,
-          unitAmount: Math.round(order.total * 100),
-          currency: "CRC",
-          description: `Pedido #${order.order_number} — Aroma Perfumería (reintento)`,
-        },
-      ],
-      redirectUrl: `${appOrigin}/orders/${orderId}?token=${freshToken}`,
-      cancelUrl: `${appOrigin}/orders/${orderId}?token=${freshToken}&cancelled=1`,
-      metadata: {
-        orderId,
-        orderNumber: String(order.order_number),
-        retry: "1",
-      },
-    });
-
-    sessionId = session.id;
-    paymentUrl = session.url;
-  } catch (err) {
-    console.error("[retry] Onvo session creation failed", { orderId, err });
-    return errorResponse(
-      "payment_provider_error",
-      "No pudimos conectar con el proveedor de pago. Intenta de nuevo en unos momentos.",
-      502,
-      err instanceof OnvoApiError ? `Onvo ${err.status}` : undefined
-    );
-  }
-
-  // ──────── Update payment_reference ────────
-  // No rollback needed if this fails — order is already in pending, stock
-  // already reserved. The new Onvo session exists either way; worst case the
-  // user pays a session whose ID we don't have stored, and the webhook handler
-  // can still match via metadata.orderId (which is the actual lookup key).
-  const { error: updateErr } = await admin
-    .from("orders")
-    .update({ payment_reference: sessionId })
-    .eq("id", orderId);
-
-  if (updateErr) {
-    console.warn(
-      "[retry] failed to update payment_reference — webhook will still match via metadata.orderId",
-      { orderId, sessionId, updateErr }
-    );
-    // Don't fail the request — the redirect can still work; webhook uses metadata.
-  }
-
-  return NextResponse.json({
-    order_id: orderId,
-    payment_url: paymentUrl,
-  });
+  // ──────── Hosted retry disabled — see header ────────
+  console.warn("[retry] hosted retry requested but disabled", { orderId });
+  return errorResponse(
+    "retry_unavailable",
+    "No podemos reintentar este pago en línea. Contáctanos por WhatsApp y te ayudamos a completarlo.",
+    410
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function resolveAppOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
-  if (explicit) return explicit;
-  return request.nextUrl.origin;
-}
 
 function notFoundResponse() {
   return NextResponse.json(

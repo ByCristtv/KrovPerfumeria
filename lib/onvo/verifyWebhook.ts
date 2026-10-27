@@ -10,10 +10,17 @@ import { timingSafeEqual } from "node:crypto";
  *   - Anyone who captures one webhook header sees the long-lived secret.
  *   - Replay protection is weak: a captured webhook can be replayed forever.
  *
- * Our route handler defends in depth by additionally verifying:
- *   1. The event references an order we created (metadata.orderId exists in DB)
- *   2. The payment_reference in DB matches the webhook's data.id
- *   3. The webhook amount matches the order total
+ * Our webhook processing defends in depth by additionally verifying, inside
+ * the apply_onvo_payment_* RPCs (20261025000100):
+ *   1. The order is resolved from OUR persisted data: the one order whose
+ *      payment_reference is the event's intent id. metadata.orderId is only
+ *      cross-checked; an intent no order references never changes any order.
+ *   2. The webhook amount (céntimos) and currency match the order total
+ *
+ * Remaining gap: intent ids are visible to the customer's browser (the SDK
+ * needs them), so anyone holding the static secret could still forge a
+ * "succeeded" event for a real (order, intent) pair. Closing that needs a
+ * server-side GET of the intent from ONVO before marking paid.
  *
  * Even with all three, the security model is weaker than HMAC-based webhooks
  * (Stripe-style). Revisit if/when Onvo publishes an HMAC verification spec.

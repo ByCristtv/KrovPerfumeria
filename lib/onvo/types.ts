@@ -118,7 +118,11 @@ export type OnvoWebhookEventType =
 
 /**
  * Generic webhook envelope. The shape of `data` depends on event type; we
- * keep it loose here and narrow per-event in the route handler.
+ * keep it loose here and narrow it in lib/onvo/webhook/event.ts.
+ *
+ * There is NO top-level event id (ONVO sends only `type` + `data`), and
+ * `data.id` is the OBJECT id — shared by every event about that intent. See
+ * webhookEventKey() for the idempotency key we derive instead.
  */
 export interface OnvoWebhookEvent {
   type: OnvoWebhookEventType | string;
@@ -128,8 +132,13 @@ export interface OnvoWebhookEvent {
     id: string;
     amount?: number;
     currency?: string;
+    /** Intent status after the event. A declined card leaves it at
+     *  `requires_payment_method` — still payable on the same intent. */
     status?: string;
     metadata?: Record<string, string>;
+    /** payment-intent.failed only: why the attempt failed. `id` identifies
+     *  the attempt. */
+    error?: { id?: string; code?: string; message?: string; type?: string };
     /** Forward-compatible: any other fields Onvo includes. */
     [key: string]: unknown;
   };
