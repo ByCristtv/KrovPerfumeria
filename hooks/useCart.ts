@@ -5,6 +5,43 @@ import { CartLineItem } from "@/types/product";
 import * as CartAPI from "@/services/cartService"; 
 import { CartItemPayload } from "@/types/cart";
 
+/**
+ * The one add-to-cart path: optimistic local add, then (signed-in users) a
+ * sync of the resulting cart. Shared by {@link useCart} and {@link useAddToCart}
+ * so the two can never disagree. Reads the store at call time, not from a render
+ * closure, so it needs no store subscription of its own.
+ */
+async function addItemAndSync(item: CartItemPayload): Promise<CartLineItem[]> {
+  const snapshot = [...useCartStore.getState().cart];
+  useCartStore.getState().addItem(item); // Optimistic UI
+
+  const userId = await CartAPI.getAuthUserId();
+  if (userId) {
+    const updatedCart = useCartStore.getState().cart;
+    await CartAPI.syncCartToDB(userId, updatedCart);
+  }
+  return snapshot;
+}
+
+/**
+ * Add-to-cart ONLY, for list items such as the catalog's product cards.
+ *
+ * `useCart()` subscribes to the whole cart store and builds four mutations; a
+ * 20-card page therefore ran 20 store subscriptions and 80 mutation observers
+ * just to render a "+" button, and every cart change re-rendered every card.
+ * This hook holds one mutation and no store subscription, so a card re-renders
+ * only for its own reasons. `mutate` is referentially stable.
+ */
+export function useAddToCart() {
+  const { mutate } = useMutation({
+    mutationFn: addItemAndSync,
+    onError: (_error, _item, context) => {
+      if (context) useCartStore.getState().setCart(context as CartLineItem[]);
+    },
+  });
+  return mutate;
+}
+
 export function useCart() {
   const store = useCartStore();
 
@@ -16,17 +53,7 @@ export function useCart() {
   );
 
   const addItemMutation = useMutation({
-    mutationFn: async (item: CartItemPayload) => {
-      const snapshot = [...store.cart];
-      store.addItem(item); // Optimistic UI
-
-      const userId = await CartAPI.getAuthUserId();
-      if (userId) {
-        const updatedCart = useCartStore.getState().cart;
-        await CartAPI.syncCartToDB(userId, updatedCart);
-      }
-      return snapshot;
-    },
+    mutationFn: addItemAndSync,
     onError: (_error, _item, context) => {
       if (context) rollback(context as CartLineItem[]);
     },

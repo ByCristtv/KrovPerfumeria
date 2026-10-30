@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
     pricingMap: {} as Record<string, unknown>,
   },
 }));
-vi.mock("@/hooks/useCart", () => ({ useCart: () => ({ addItem: h.addItem }) }));
+vi.mock("@/hooks/useCart", () => ({ useAddToCart: () => h.addItem }));
 vi.mock("@/components/catalog/CatalogWholesaleContext", () => ({
   useCatalogWholesale: () => h.wholesale,
 }));
@@ -138,7 +138,7 @@ describe("normal availability: own bottle in stock", () => {
     expect(h.addItem).toHaveBeenCalledTimes(1);
   });
 
-  it("low stock gets the one badge ÚLTIMAS UNIDADES and keeps the + control", () => {
+  it("low stock is just 'in stock': NO badge, no count, and the + control is live", () => {
     render(
       <ProductCard
         product={card([bottle({ stock: 2, supplier_available: true }), ...DECANTS], {
@@ -147,17 +147,31 @@ describe("normal availability: own bottle in stock", () => {
       />
     );
 
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Últimas unidades"]);
+    expect(inventoryBadges()).toHaveLength(0);
+    expect(badgeRow()).toBeEmptyDOMElement();
+    expect(screen.queryByText(/últimas|unidades|quedan|disponibles:/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Botella · 100 ml")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: ADD })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: WHATSAPP })).not.toBeInTheDocument();
   });
 
-  it("the threshold is 5: five is low, six is not", () => {
-    const { unmount } = render(<ProductCard product={card([bottle({ stock: 5 })])} />);
-    expect(inventoryBadges()).toHaveLength(1);
-    unmount();
+  it("looks the same at every stock level, and still adds with the REAL stock", () => {
+    // The resolver still tells low stock from plenty (cardState.test.ts owns the
+    // threshold); the card must draw no difference between them, and the units
+    // handed to the cart must stay the true figure — stock validation is untouched.
+    for (const stock of [1, 5, 6, 40]) {
+      h.addItem.mockClear();
+      const { unmount } = render(<ProductCard product={card([bottle({ stock })])} />);
 
-    render(<ProductCard product={card([bottle({ stock: 6 })])} />);
-    expect(inventoryBadges()).toHaveLength(0);
+      expect(inventoryBadges(), `stock ${stock}`).toHaveLength(0);
+      expect(badgeRow(), `stock ${stock}`).toBeEmptyDOMElement();
+
+      fireEvent.click(screen.getByRole("button", { name: ADD }));
+      expect(h.addItem, `stock ${stock}`).toHaveBeenCalledWith(
+        expect.objectContaining({ variant_id: "bottle", stock })
+      );
+      unmount();
+    }
   });
 
   it("adds the bottle KROV actually holds when the featured size is out of stock", () => {
@@ -402,11 +416,13 @@ describe("discounts: top-right, real, and about the variant on show", () => {
   });
 
   it("sits beside the availability badge in its own corner, never stacked with it", () => {
-    render(<ProductCard product={card([onOffer({ stock: 2 })])} />);
+    render(
+      <ProductCard product={card([onOffer({ stock: 0, supplier_available: true })])} />
+    );
 
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Últimas unidades"]);
+    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Por encargo"]);
     const discount = screen.getByText("-17%").parentElement!;
-    const availability = screen.getByText("Últimas unidades");
+    const availability = screen.getByText("Por encargo", { selector: "span" });
     expect(discount).not.toContainElement(availability);
     expect(availability.parentElement).toBe(discount.parentElement); // one row: left | right
     expect(discount.className).toContain("ml-auto"); // pinned right even with no left badge
@@ -633,3 +649,64 @@ function wholesalePricing(): VariantPricing {
     min_wholesale_quantity: 3,
   };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Mobile scroll cost. These pin the rendering decisions that made the catalog
+// stutter on phones, so a later restyle cannot quietly bring them back.
+describe("rendering cost (mobile catalog)", () => {
+  const everyState = () => [
+    [bottle()],
+    [bottle({ stock: 2 })],
+    [bottle({ stock: 0, supplier_available: true })],
+    [bottle({ stock: 0 }), ...DECANTS],
+    [bottle({ stock: 0 })],
+  ];
+
+  it("no element in any state uses a backdrop filter (one compositor pass per badge)", () => {
+    for (const variants of everyState()) {
+      const { container, unmount } = render(
+        <ProductCard product={card(variants, { decant_stock_ml: 50 })} />
+      );
+      expect(container.querySelector('[class*="backdrop"]')).toBeNull();
+      unmount();
+    }
+  });
+
+  it("the photograph paints on its own: no load-state fade, no skeleton pulse", () => {
+    const { container } = render(<ProductCard product={card([bottle()])} />);
+
+    expect(container.querySelector(".animate-pulse")).toBeNull();
+    const img = container.querySelector("img")!;
+    expect(img.className).not.toContain("opacity-0");
+    // Only transforms animate on the image, and never `transition-all`.
+    expect(img.className).toContain("transition-transform");
+    expect(container.innerHTML).not.toContain("transition-all");
+  });
+
+  it("asks for the width the photograph is drawn at, not the whole column", () => {
+    const { container } = render(<ProductCard product={card([bottle()])} />);
+    const sizes = container.querySelector("img")!.getAttribute("sizes")!;
+
+    // Two columns on a phone: (50vw column) - (56px of plate padding) - gutters.
+    expect(sizes).toContain("(max-width: 639px) calc(50vw - 84px)");
+    // The widest case is a fixed pixel size, so a big monitor does not ask for 25vw of 2560.
+    expect(sizes.endsWith("230px")).toBe(true);
+  });
+
+  it("hides the corner control until hover ONLY where hover exists", () => {
+    render(<ProductCard product={card([bottle()])} />);
+    const cls = screen.getByRole("button", { name: ADD }).className;
+
+    // The bare `sm:opacity-0` hid the add button from touch tablets (>= 640px).
+    expect(cls).not.toMatch(/(^|\s)sm:opacity-0(\s|$)/);
+    expect(cls).toContain("[@media(hover:hover)_and_(min-width:40rem)]:opacity-0");
+    expect(cls).toContain("sm:group-hover:opacity-100");
+    expect(cls).not.toContain("transition-all");
+  });
+
+  it("the 'added' confirmation stays visible (it must beat the hover-hidden state)", () => {
+    render(<ProductCard product={card([bottle()])} />);
+    fireEvent.click(screen.getByRole("button", { name: ADD }));
+    expect(screen.getByRole("button", { name: ADD }).className).toContain("opacity-100!");
+  });
+});

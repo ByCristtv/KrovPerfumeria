@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { useCart } from "@/hooks/useCart";
+import { useAddToCart } from "@/hooks/useCart";
 import type { ProductCardData, ProductTypes } from "@/types/product";
 import { resolveCardState, type CardState, type CardStatus } from "@/lib/catalog/cardState";
 import { buildProductInquiryUrl } from "@/lib/whatsapp/productInquiry";
@@ -13,6 +13,24 @@ import { useCatalogWholesale } from "@/components/catalog/CatalogWholesaleContex
 import { isWholesaleConfigured } from "@/lib/pricing/wholesale";
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
+
+/**
+ * The width the photograph is actually drawn at, so the browser requests (and
+ * decodes) a candidate that size and not the whole column. The plate has `p-7`
+ * (28px a side) around the image, so the drawn width is the column width minus
+ * 56px; the column widths come from ProductGrid (2 columns below 768px, 3 below
+ * 1024px, 4 above) and the page gutters (px-5, sm:px-8) inside `max-w-7xl`.
+ * Using the full column made a 3x phone fetch and decode a 640px image for a
+ * ~110px slot: ~3x the bytes and bitmap memory, times every card on the page.
+ * Keep in sync with ProductGrid's columns and the plate padding below.
+ */
+const IMAGE_SIZES = [
+  "(max-width: 639px) calc(50vw - 84px)",
+  "(max-width: 767px) calc(50vw - 100px)",
+  "(max-width: 1023px) calc(33.4vw - 93px)",
+  "(max-width: 1279px) calc(25vw - 90px)",
+  "230px",
+].join(", ");
 
 const TYPE_LABEL: Record<ProductTypes, string> = {
   full_size: "Botella",
@@ -39,7 +57,10 @@ const TYPE_LABEL: Record<ProductTypes, string> = {
  * decants only, sold out — is decided by `resolveCardState` (lib/catalog/
  * cardState.ts), never here. This file only DRAWS a state:
  *
- *   top-left   ONE availability badge (or none when the bottle is simply there)
+ *   top-left   ONE availability badge — or none when KROV holds the bottle
+ *              (`available` AND `low_stock`: the resolver still tells them apart
+ *              for its callers, but the card shows no badge and no count for
+ *              either; only the non-stock states need a label)
  *   top-right  the discount, when it is real — a different fact, so it may sit
  *              beside the availability badge but never replaces it
  *   corner     ONE control, chosen by the state, not by the mere existence of
@@ -54,13 +75,17 @@ const TYPE_LABEL: Record<ProductTypes, string> = {
 
 type BadgeTone = "quiet" | "muted";
 
+// Flat translucent fills, NOT `backdrop-blur`: a backdrop filter makes the
+// compositor end the render pass, re-read the pixels behind the badge and blur
+// them again on every scrolled frame, once per badge in view. On a 90%-opaque
+// plate the blur was invisible anyway.
 const BADGE_TONE: Record<BadgeTone, string> = {
-  quiet: "bg-krov-void/85 text-krov-blush backdrop-blur-sm",
-  muted: "bg-krov-void/90 text-krov-ash backdrop-blur-sm",
+  quiet: "bg-krov-void/85 text-krov-blush",
+  muted: "bg-krov-void/90 text-krov-ash",
 };
 
+// No `available` / `low_stock` entry: a bottle KROV holds carries no badge.
 const STATUS_BADGE: Partial<Record<CardStatus, { label: string; tone: BadgeTone }>> = {
-  low_stock: { label: "Últimas unidades", tone: "quiet" },
   made_to_order: { label: "Por encargo", tone: "quiet" },
   decants_only: { label: "Solo en decants", tone: "quiet" },
   sold_out: { label: "Agotado", tone: "muted" },
@@ -109,16 +134,21 @@ function presentationLabel(state: CardState): string {
 
 // ── Corner control (bottom-right) ───────────────────────────────────────────
 
+// Hidden until hover only where hover exists (a mouse at >= 640px). A touch
+// tablet is also >= 640px wide, and `sm:opacity-0` alone would have hidden the
+// add button from it for good — there is no hover to bring it back.
 const CORNER =
-  "absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center transition-all duration-300 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
+  "absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center transition-[opacity,background-color,color] duration-200 motion-reduce:transition-none [@media(hover:hover)_and_(min-width:40rem)]:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
 const CORNER_LIVE =
   "bg-krov-void/90 text-krov-blush hover:bg-krov-blood hover:text-krov-void";
 
 export default function ProductCard({ product }: { product: ProductCardData }) {
-  const { addItem } = useCart();
+  // The add-only hook, not `useCart()`: that one subscribes to the WHOLE cart
+  // store and builds four mutations, so every card on the page (up to 20) paid
+  // for it on mount and re-rendered on every cart change.
+  const addItem = useAddToCart();
   const { eligible, pricingMap } = useCatalogWholesale();
 
-  const [imgLoaded, setImgLoaded] = useState(false);
   const [added, setAdded] = useState(false);
   const addedTimeout = useRef<number | null>(null);
 
@@ -186,7 +216,7 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
   const startsFrom = status === "decants_only" && state.decantsAvailable.length > 1;
 
   return (
-    <article className="animate-fadeIn group flex h-full flex-col rounded-2xl bg-krov-void/30">
+    <article className="animate-fadeIn group flex h-full flex-col">
       {/* ── The niche ──────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-t-xl">
         <Link
@@ -194,23 +224,17 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
           className="relative block aspect-4/5 overflow-hidden bg-linear-to-b from-krov-linen to-krov-linen-deep"
           aria-label={`Ver ${product.name}`}
         >
-          {/* Skeleton until the image decodes — same plate, one shade darker,
-              so nothing shifts in tone when the photograph lands. */}
-          {!imgLoaded && (
-            <span
-              aria-hidden
-              className="absolute inset-0 animate-pulse bg-krov-linen-deep"
-            />
-          )}
+          {/* The linen plate is already the image's placeholder, so there is no
+              skeleton, no load-state and no fade: the photograph simply paints
+              when the browser has decoded it (`decoding="async"`, lazy below
+              the fold). That was one `useState`, one re-render and one infinite
+              `animate-pulse` per card, ~20 of them while a page loaded. */}
           <Image
             src={imageUrl}
             alt={product.name}
             fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            onLoad={() => setImgLoaded(true)}
-            className={`object-contain p-7 duration-700 ease-krov group-hover:scale-[1.04] transition-all ${
-              imgLoaded ? "opacity-100" : "opacity-0"
-            }`}
+            sizes={IMAGE_SIZES}
+            className="object-contain p-7 transition-transform duration-500 ease-krov motion-reduce:transition-none group-hover:scale-[1.04]"
           />
 
           {/* A red edge lights along the foot of the plate on hover. Cheaper to
@@ -245,7 +269,7 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
             aria-label={`Agregar ${product.name} al carrito`}
             className={`${CORNER} ${
               added
-                ? "bg-krov-blood text-krov-void sm:opacity-100"
+                ? "bg-krov-blood text-krov-void opacity-100!"
                 : CORNER_LIVE
             }`}
           >

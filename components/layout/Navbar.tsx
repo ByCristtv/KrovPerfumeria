@@ -86,10 +86,17 @@ export default function Navbar() {
           it. On scroll it condenses into an opaque plane. Only the backdrop and
           height change; the mark never moves horizontally.
         */}
+        {/*
+          No `backdrop-blur` once scrolled. The bar is fixed, so it is over the
+          scrolling page on every frame; a backdrop filter makes the compositor
+          re-read and re-blur whatever is behind it each time, and at 95% opacity
+          the blur showed through as nothing. A plain near-opaque plane looks the
+          same and costs nothing.
+        */}
         <nav
-          className={`transition-[background-color,backdrop-filter] duration-500 ${
+          className={`transition-colors duration-500 ${
             scrolled
-              ? "bg-krov-void/92 backdrop-blur-xl"
+              ? "bg-krov-void/95"
               : "bg-gradient-to-b from-krov-void/85 to-transparent"
           }`}
         >

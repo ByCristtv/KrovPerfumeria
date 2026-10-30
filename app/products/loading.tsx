@@ -35,11 +35,11 @@ export default function CatalogLoading() {
         <CatalogHero asHeading={false} />
 
         <div className="mx-auto max-w-7xl px-5 pb-24 sm:px-8">
-          {/* Toolbar: the real glass shell, not a bone — it is chrome the user
+          {/* Toolbar: the real shell, not a bone — it is chrome the user
               already knows, and keeping it solid stops the page from reading as
               "everything is missing". Only its controls are placeholders. The
               46px rows match the real input (py-3 + 20px line + 2px border). */}
-          <div className="rounded-2xl border border-white/8 bg-krov-ink/85 p-4 sm:p-5">
+          <div className="rounded-2xl border border-white/8 bg-krov-ink p-4 sm:p-5">
             <SkeletonRegion className="flex items-center gap-3">
               <Bone className="h-[46px] flex-1 rounded-lg" />
               <Bone className="h-[46px] w-[7.5rem] shrink-0 rounded-lg" />

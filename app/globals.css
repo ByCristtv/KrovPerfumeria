@@ -307,20 +307,42 @@ body > * {
      Large flat black planes look like an unfinished template on an OLED phone.
      A 3% fractal-noise overlay gives them the tooth of printed matte stock —
      the difference between "dark theme" and "art-directed". Rendered once as an
-     inline SVG filter; no image request, no animation, no layout cost. */
+     inline SVG filter; no image request, no animation, no layout cost.
+
+     Why it is `fixed` and has no blend mode (it used to be `absolute; inset: 0`
+     with `mix-blend-mode: overlay` on an isolated body):
+       · `absolute; inset: 0` on the body made the layer as tall as the DOCUMENT
+         (~3,000px on a 10-card catalog page, well over 6,000px on a 20-card one),
+         tiled in GPU memory and resized on every layout change.
+       · A blend mode makes the browser render the whole isolated body into an
+         offscreen surface and blend the overlay into it on EVERY frame — which
+         turns each scrolled frame into an extra full-page pass, worst on phones.
+     Fixed, it is one viewport-sized texture: the same noise over the same
+     colours, since a repeating tile has no position to "stay continuous" with.
+     At 3.5% the overlay blend was already below one 8-bit step on these
+     near-black grounds, so plain alpha looks the same; touch devices skip it
+     entirely, as there is nothing to see and every pixel counts.
+
+     `position: relative` stays on the body: absolutely positioned descendants
+     without a positioned ancestor resolve against it today, and dropping it
+     would silently move them. `isolation: isolate` went with the blend mode it
+     existed for. */
   .krov-grain {
     position: relative;
-    isolation: isolate;
   }
   .krov-grain::after {
     content: "";
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: 1;
     pointer-events: none;
     opacity: 0.035;
-    mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  @media (pointer: coarse) {
+    .krov-grain::after {
+      display: none;
+    }
   }
 
   /* ═══ THE PULSE ══════════════════════════════════════════════════════════
@@ -617,9 +639,13 @@ body > * {
       transform: none;
     }
   }
+  /* `backwards`, not `both`: the end keyframe is the element's resting style, so
+     there is nothing to hold. With `both`, every finished entrance stayed
+     attached to its element (a 10-card page reported 10 "finished" animations
+     long after load) and kept its opacity/transform under animation control. */
   .krov-enter,
   .krov-enter-stagger > :nth-child(n) {
-    animation: krovEnter 420ms var(--ease-krov) both;
+    animation: krovEnter 420ms var(--ease-krov) backwards;
   }
   .krov-enter-stagger > :nth-child(2) { animation-delay: 40ms; }
   .krov-enter-stagger > :nth-child(3) { animation-delay: 80ms; }
