@@ -2,14 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/lib/format";
+import type { AvailabilityStatus } from "@/lib/stock";
 
 interface StickyPurchaseBarProps {
   productName: string;
   variantLabel: string;
   price: number;
+  /**
+   * What the selected variant is to a customer. Decides the single action the
+   * bar offers: add to cart, inquire on WhatsApp, or nothing (sold out).
+   */
+  status: AvailabilityStatus;
   onAdd: () => void;
-  disabled: boolean;
+  /** Prefilled WhatsApp link; used only when `status` is `made_to_order`. */
+  inquiryUrl: string | null;
 }
+
+const ACTION_CLASS =
+  "shrink-0 bg-krov-blood px-6 py-3.5 text-[10px] uppercase tracking-[0.2em] text-krov-void transition-colors disabled:bg-krov-graphite disabled:text-krov-dust";
 
 /**
  * Mobile-only sticky purchase bar. Slides up once the user scrolls past the
@@ -29,8 +39,9 @@ export default function StickyPurchaseBar({
   productName,
   variantLabel,
   price,
+  status,
   onAdd,
-  disabled,
+  inquiryUrl,
 }: StickyPurchaseBarProps) {
   const [visible, setVisible] = useState(false);
 
@@ -41,10 +52,10 @@ export default function StickyPurchaseBar({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // While the bar is on screen, lift the Navbar's floating cart clear of it via
-  // a root class (decoupled — no shared React state). Scoped to the viewport
+  // While the bar is on screen, slide the mobile cart bar out of its way via a
+  // root class (decoupled — no shared React state). Scoped to the viewport
   // where the bar actually renders (matches the `md:hidden` below) so the cart
-  // never shifts on tablet/desktop where the bar is hidden.
+  // bar never moves on tablet where this bar is hidden.
   useEffect(() => {
     const root = document.documentElement;
     const onMobile = window.matchMedia("(max-width: 767px)").matches;
@@ -71,17 +82,37 @@ export default function StickyPurchaseBar({
           </p>
           <p className="text-sm leading-tight tabular-nums text-krov-bone">
             {formatPrice(price)}{" "}
-            <span className="text-[10px] text-krov-dust">· {variantLabel}</span>
+            <span className="text-[10px] text-krov-dust">
+              · {variantLabel}
+              {status === "made_to_order" && " · Por encargo"}
+            </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={disabled}
-          className="shrink-0 bg-krov-blood px-6 py-3.5 text-[10px] uppercase tracking-[0.2em] text-krov-void transition-colors disabled:bg-krov-graphite disabled:text-krov-dust"
-        >
-          {disabled ? "Agotado" : "Agregar"}
-        </button>
+
+        {status === "made_to_order" ? (
+          // A link, not the add button: it opens a WhatsApp inquiry and never
+          // reaches the cart. With no link there is simply no action.
+          inquiryUrl && (
+            <a
+              href={inquiryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={ACTION_CLASS}
+            >
+              Consultar
+              <span className="sr-only"> disponibilidad por WhatsApp (abre una pestaña nueva)</span>
+            </a>
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={status === "sold_out"}
+            className={ACTION_CLASS}
+          >
+            {status === "sold_out" ? "Agotado" : "Agregar"}
+          </button>
+        )}
       </div>
     </div>
   );

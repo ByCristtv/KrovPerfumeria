@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Swal from "sweetalert2";
 import { supabase } from "@/lib/supabase/client";
+import { setSupplierAvailabilityAction } from "@/app/admin/products/actions";
+import { resolveAvailability, type AvailabilityStatus } from "@/lib/stock";
 import type { AdminVariantRow } from "@/types/product";
 
 const currency = new Intl.NumberFormat("es-CR", {
@@ -53,6 +56,198 @@ function VariantThumbnail({ url, name }: { url: string | null; name: string }) {
         sizes={`${THUMB_WIDTH}px`}
         className="object-contain p-1"
       />
+    </div>
+  );
+}
+
+/**
+ * Costa Rica time on purpose: this component is server-rendered and then
+ * hydrated in the admin's browser, and a timezone-dependent date would render
+ * differently in the two places (a hydration mismatch near midnight).
+ */
+const CHECKED_DATE = new Intl.DateTimeFormat("es-CR", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "America/Costa_Rica",
+});
+
+function formatChecked(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : CHECKED_DATE.format(date);
+}
+
+/** What a customer would see for this row, in the storefront's own words. */
+const STORE_STATUS_LABEL: Record<AvailabilityStatus, string> = {
+  in_stock: "En stock",
+  made_to_order: "Por encargo",
+  sold_out: "Agotado",
+};
+
+const SUPPLIER_BTN =
+  "border border-krov-smoke px-2 py-1 text-[11px] uppercase tracking-wide text-krov-bone transition-colors hover:bg-krov-graphite disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * The "Proveedor" cell: what an admin last saw on the SUPPLIER's website for
+ * this variant - never KROV's own inventory, which has its own column.
+ *
+ * Three recorded states (disponible / agotado / sin verificar) and one derived
+ * line, "En tienda", showing what customers will actually see. The derived line
+ * is the point: the supplier flag only matters while KROV has no stock of its
+ * own, and spelling out the outcome saves the admin from working that out.
+ *
+ * Decants get no control - their only inventory is KROV's ml pool, and the
+ * database refuses to flag them anyway. A row whose supplier data could not be
+ * loaded (migration pending) shows a dash instead of guessing "agotado".
+ */
+function SupplierCell({
+  row,
+  onChanged,
+}: {
+  row: AdminVariantRow;
+  onChanged?: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  if (row.product_type === "decant") {
+    return (
+      <span
+        className="text-krov-ash"
+        title="Los decants se venden del pool de ml propio; no usan disponibilidad del proveedor."
+      >
+        No aplica
+      </span>
+    );
+  }
+
+  if (row.supplier_available === undefined) {
+    return (
+      <span
+        className="text-krov-ash"
+        title="No se pudo leer la disponibilidad del proveedor (¿falta aplicar la migración 20261029000100?)."
+      >
+        —
+      </span>
+    );
+  }
+
+  const available = row.supplier_available;
+  const checked = formatChecked(row.supplier_checked_at);
+  const verified = row.supplier_checked_at != null;
+
+  const store = resolveAvailability(
+    {
+      product_type: row.product_type,
+      size_ml: row.size_ml,
+      stock: row.stock,
+      supplier_available: available,
+    },
+    null
+  );
+
+  const label = available
+    ? { text: "Disponible en proveedor", className: "text-emerald-400" }
+    : verified
+      ? { text: "Agotado en proveedor", className: "text-krov-ash" }
+      : { text: "Sin verificar", className: "italic text-krov-ash" };
+
+  const run = async (value: boolean) => {
+    setPending(true);
+    try {
+      const result = await setSupplierAvailabilityAction(row.variant_id, value);
+      if (!result.ok) {
+        void Swal.fire({
+          icon: "error",
+          title: "No se pudo actualizar",
+          text: result.message,
+          confirmButtonColor: "#ff4d74",
+        });
+        return;
+      }
+      onChanged?.();
+      void Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: result.message,
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
+      });
+    } catch {
+      void Swal.fire({
+        icon: "error",
+        title: "No se pudo actualizar",
+        text: "Error de conexión. Intenta de nuevo.",
+        confirmButtonColor: "#ff4d74",
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="flex min-w-[11rem] flex-col gap-1.5">
+      <div>
+        <span className={label.className}>{label.text}</span>
+        {checked && (
+          <span className="block text-[11px] text-krov-ash">
+            verificado {checked}
+          </span>
+        )}
+      </div>
+
+      {row.is_active && (
+        <span
+          className="text-[11px] text-krov-ash"
+          title={
+            available && row.stock > 0
+              ? "Hay stock propio: el proveedor no se usa mientras haya unidades."
+              : undefined
+          }
+        >
+          En tienda:{" "}
+          <span className="text-krov-bone">{STORE_STATUS_LABEL[store.status]}</span>
+        </span>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {!available && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run(true)}
+            aria-label={`Marcar ${row.sku} como disponible en el proveedor`}
+            className={SUPPLIER_BTN}
+          >
+            Marcar disponible
+          </button>
+        )}
+        {(available || !verified) && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run(false)}
+            aria-label={`Marcar ${row.sku} como agotado en el proveedor`}
+            className={SUPPLIER_BTN}
+          >
+            Marcar agotado
+          </button>
+        )}
+        {verified && (
+          // Same value again: records "I checked today" without changing the answer.
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run(available)}
+            aria-label={`Reconfirmar la disponibilidad de ${row.sku} en el proveedor`}
+            className={SUPPLIER_BTN}
+          >
+            Reconfirmar
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -131,7 +326,8 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
             <th className="px-4 py-3">Tamaño</th>
             <th className="px-4 py-3">Precio</th>
             <th className="px-4 py-3">Mayorista</th>
-            <th className="px-4 py-3">Stock</th>
+            <th className="px-4 py-3">Stock propio</th>
+            <th className="px-4 py-3">Proveedor</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3 text-right">Acciones</th>
           </tr>
@@ -208,6 +404,9 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
                   >
                     {v.product_type === "decant" ? "X" : v.stock}
                   </span>
+                </td>
+                <td className="px-4 py-3 align-top text-xs">
+                  <SupplierCell row={v} onChanged={onChanged} />
                 </td>
                 <td className="px-4 py-3">
                   <span

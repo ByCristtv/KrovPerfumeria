@@ -28,6 +28,16 @@ export interface AdminVariantRow {
   // Wholesale (B2B) — NULL when this variant isn't sold wholesale.
   wholesale_price: number | null;
   min_wholesale_quantity: number | null;
+  /**
+   * Supplier availability (NOT KROV's stock), as last verified by an admin.
+   * Filled only by the products table (`getProductsAdminPage`). `undefined` means
+   * "not loaded" - the variant pickers never read it, and the table also leaves
+   * it unset if the supplier migration is not applied yet - which is different
+   * from `false` ("verified sold out, or never verified").
+   */
+  supplier_available?: boolean;
+  /** When an admin last inspected the supplier catalog; null = never. */
+  supplier_checked_at?: string | null;
   name: string;
   description: string | null;
   brand: string;
@@ -48,6 +58,17 @@ export interface ProductVariant {
   size_ml: number;
   product_type: ProductTypes;
   position: number;
+  /**
+   * Variant SKU. Selected by the detail query from Phase 3 on; absent on older
+   * payloads, so consumers must treat a missing value as "unknown".
+   */
+  sku?: string;
+  /**
+   * Supplier availability, manually verified by an admin (NOT KROV inventory).
+   * `undefined`/`null` mean "not verified" and are treated as NOT available -
+   * see `resolveAvailability` in lib/stock.ts.
+   */
+  supplier_available?: boolean | null;
 }
 
 export interface ProductDetailData {
@@ -75,6 +96,21 @@ export interface ProductDetailData {
   }[];
 }
 
+/** A variant as the catalog card needs it: pricing, own stock and the supplier flag. */
+export interface ProductCardVariant {
+  id: string;
+  price: number;
+  offer_price: number | null;
+  is_on_offer: boolean;
+  stock: number;
+  size_ml: number;
+  product_type: ProductTypes;
+  /** Selected by the catalog queries from Phase 3 on; see `ProductVariant.sku`. */
+  sku?: string;
+  /** `undefined`/`null` = not verified = NOT available; see `ProductVariant`. */
+  supplier_available?: boolean | null;
+}
+
 /**
  * Catalog card data — ONE card per parent product. The card represents the
  * product through its primary (featured) variant and the parent's first image.
@@ -86,17 +122,17 @@ export interface ProductCardData {
   gender: "masculine" | "feminine" | "unisex";
   concentration: string;
   brands: { name: string } | null;
-  /** Parent decant pool — only needed when the featured variant is a decant. */
+  /** Parent decant pool — the only inventory every decant variant draws from. */
   decant_stock_ml: number;
-  featured_variant: {
-    id: string;
-    price: number;
-    offer_price: number | null;
-    is_on_offer: boolean;
-    stock: number;
-    size_ml: number;
-    product_type: ProductTypes;
-  } | null;
+  featured_variant: ProductCardVariant | null;
+  /**
+   * Every ACTIVE variant of the product (bottles, sets, decants). The card needs
+   * them to answer "can this perfume be had in another form?" - e.g. a bottle
+   * that is out of stock but sold as decants. Optional: payloads that do not
+   * select it (related products) fall back to `featured_variant` alone, which
+   * means "decants unknown", never "decants available".
+   */
+  variants?: ProductCardVariant[];
   product_images: {
     url: string;
     position: number;

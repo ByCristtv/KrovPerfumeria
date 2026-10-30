@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
-import { ProductCardData, ProductTypes } from "@/types/product";
-import { availableUnits } from "@/lib/stock";
+import type { ProductCardData, ProductTypes } from "@/types/product";
+import { resolveCardState, type CardState, type CardStatus } from "@/lib/catalog/cardState";
+import { buildProductInquiryUrl } from "@/lib/whatsapp/productInquiry";
 import { formatPrice } from "@/lib/format";
 import { useCatalogWholesale } from "@/components/catalog/CatalogWholesaleContext";
 import { isWholesaleConfigured } from "@/lib/pricing/wholesale";
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
-const LOW_STOCK_THRESHOLD = 5;
 
 const TYPE_LABEL: Record<ProductTypes, string> = {
   full_size: "Botella",
@@ -23,46 +23,100 @@ const TYPE_LABEL: Record<ProductTypes, string> = {
 /**
  * ── The card ────────────────────────────────────────────────────────────────
  *
- * Rebuilt from a rounded, bordered, shadowed box into a plate: a luminous image
- * niche with the type set beneath it on the page's own ground. There is no
- * container — the photograph and the words are the card.
+ * A plate: a luminous image niche with the type set beneath it on the page's own
+ * ground. There is no container — the photograph and the words are the card.
  *
- * Two deliberate calls:
+ * · The niche stays LIGHT. Product photography is shot on white, so a dark tile
+ *   would either show a white rectangle or need every asset re-cut.
  *
- * · The niche stays LIGHT. Product photography is shot on white, so a dark
- *   tile would either show a white rectangle or need every asset re-cut. A
- *   linen plate in a black grid also reads as gallery lighting, which is
- *   exactly the register KROV wants.
+ * · The corner control is a small square that only fills with red on hover, and
+ *   on touch it is permanently visible. Hiding a primary action behind hover is a
+ *   desktop-only affordance and would strand every phone.
  *
- * · The add-to-cart control is a small square that only fills with red on
- *   hover, and on touch it is permanently visible. Hiding a primary action
- *   behind hover is a desktop-only affordance and would strand every phone.
+ * ── What the card says, and who decides ─────────────────────────────────────
  *
- * All commerce behaviour — variant resolution, wholesale gating, stock maths,
- * `addItem` payload — is unchanged from the previous version.
+ * Which of the five states a card is in — available, low stock, made to order,
+ * decants only, sold out — is decided by `resolveCardState` (lib/catalog/
+ * cardState.ts), never here. This file only DRAWS a state:
+ *
+ *   top-left   ONE availability badge (or none when the bottle is simply there)
+ *   top-right  the discount, when it is real — a different fact, so it may sit
+ *              beside the availability badge but never replaces it
+ *   corner     ONE control, chosen by the state, not by the mere existence of
+ *              decants: + (add) · WhatsApp · + (pick a decant) · disabled
+ *
+ * The presentation line and the price always describe the SAME variant — the one
+ * the card actually offers — so a bottle's price is never shown beside a decant,
+ * and a bottle nobody can obtain is never the only thing a card advertises.
  */
 
-type BadgeTone = "blood" | "outline" | "muted";
+// ── Availability badge (top-left) ───────────────────────────────────────────
 
-function Badge({ label, tone }: { label: string; tone: BadgeTone }) {
-  const styles: Record<BadgeTone, string> = {
-    blood: "bg-krov-blood text-krov-void",
-    outline: "bg-krov-void/80 text-krov-blush backdrop-blur-sm",
-    muted: "bg-krov-void/85 text-krov-ash backdrop-blur-sm",
-  };
+type BadgeTone = "quiet" | "muted";
+
+const BADGE_TONE: Record<BadgeTone, string> = {
+  quiet: "bg-krov-void/85 text-krov-blush backdrop-blur-sm",
+  muted: "bg-krov-void/90 text-krov-ash backdrop-blur-sm",
+};
+
+const STATUS_BADGE: Partial<Record<CardStatus, { label: string; tone: BadgeTone }>> = {
+  low_stock: { label: "Últimas unidades", tone: "quiet" },
+  made_to_order: { label: "Por encargo", tone: "quiet" },
+  decants_only: { label: "Solo en decants", tone: "quiet" },
+  sold_out: { label: "Agotado", tone: "muted" },
+};
+
+/** Compact, rectangular, uppercase. It may wrap to two lines beside a discount. */
+function AvailabilityBadge({ status }: { status: CardStatus }) {
+  const badge = STATUS_BADGE[status];
+  if (!badge) return null;
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 text-[9px] uppercase tracking-[0.2em] ${styles[tone]}`}
+      className={`min-w-0 px-2 py-1 text-[9px] uppercase leading-[1.3] tracking-[0.14em] ${BADGE_TONE[badge.tone]}`}
     >
-      {label}
+      {badge.label}
     </span>
   );
 }
 
+// ── Presentation line ───────────────────────────────────────────────────────
+
+/**
+ * "Botella · 100 ml", "Botella · 100 ml · Por encargo", "Decants disponibles ·
+ * Desde 3 ml".
+ *
+ * On a two-column phone this line often cannot fit on one row. It is built from
+ * segments whose inner spaces are non-breaking, so it wraps BETWEEN segments
+ * ("Botella · 100 ml ·" / "Por encargo") and never inside one ("Por / encargo",
+ * "100 / ml").
+ */
+function presentationLabel(state: CardState): string {
+  const v = state.presented;
+
+  const segments =
+    state.status === "decants_only"
+      ? state.decantsAvailable.length > 1
+        ? ["Decants disponibles", `Desde ${state.decantFromMl} ml`]
+        : ["Decant", `${v.size_ml} ml`]
+      : [
+          TYPE_LABEL[v.product_type],
+          `${v.size_ml} ml`,
+          ...(state.status === "made_to_order" ? ["Por encargo"] : []),
+        ];
+
+  return segments.map((s) => s.replace(/ /g, "\u00a0")).join(" · ");
+}
+
+// ── Corner control (bottom-right) ───────────────────────────────────────────
+
+const CORNER =
+  "absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center transition-all duration-300 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
+const CORNER_LIVE =
+  "bg-krov-void/90 text-krov-blush hover:bg-krov-blood hover:text-krov-void";
+
 export default function ProductCard({ product }: { product: ProductCardData }) {
   const { addItem } = useCart();
   const { eligible, pricingMap } = useCatalogWholesale();
-  const variant = product.featured_variant;
 
   const [imgLoaded, setImgLoaded] = useState(false);
   const [added, setAdded] = useState(false);
@@ -74,43 +128,62 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
     };
   }, []);
 
-  // A product with no commercial variant can't be sold or priced.
-  if (!variant) return null;
+  // A product with no commercial (featured) variant can't be sold or priced.
+  const state = product.featured_variant ? resolveCardState(product) : null;
+  if (!state) return null;
 
+  const { status, action, presented, price } = state;
   const imageUrl = product.product_images[0]?.url || "/placeholder.png";
-  const effectivePrice =
-    variant.is_on_offer && variant.offer_price ? variant.offer_price : variant.price;
 
-  // Wholesale dual pricing — shown only to approved buyers, and only when the
-  // featured variant is fully configured for wholesale. Prices come from the
-  // client-side wholesale fetch (see CatalogWholesaleProvider), never the DTO.
-  const wholesale = pricingMap[variant.id];
+  // Wholesale dual pricing — approved buyers only, only where the card offers the
+  // regular add-to-cart (a made-to-order bottle or a decant never enters a
+  // wholesale cart), and only for the featured variant, whose wholesale columns
+  // are the ones fetched client-side (see CatalogWholesaleProvider).
+  const wholesale = pricingMap[presented.id];
   const showWholesale =
-    eligible && !!wholesale && isWholesaleConfigured(wholesale);
+    eligible &&
+    action === "add_to_cart" &&
+    price.current !== null &&
+    !!wholesale &&
+    isWholesaleConfigured(wholesale);
   const wholesalePrice = showWholesale ? (wholesale.wholesale_price as number) : null;
   const minWholesaleQty = showWholesale
     ? (wholesale.min_wholesale_quantity as number)
     : null;
 
-  const stock = availableUnits(variant, product.decant_stock_ml);
-  const inStock = stock > 0;
-  const lowStock = inStock && stock <= LOW_STOCK_THRESHOLD;
+  // The inquiry describes the bottle the card presents, at the published retail
+  // price — an inquiry is not a wholesale order.
+  const inquiryUrl =
+    action === "whatsapp"
+      ? buildProductInquiryUrl({
+          productName: product.name,
+          brand: product.brands?.name,
+          sizeMl: presented.size_ml,
+          productType: presented.product_type,
+          sku: presented.sku,
+          price: price.current,
+          slug: product.slug,
+        })
+      : null;
 
   const handleAddToCart = () => {
-    if (!inStock) return;
+    if (action !== "add_to_cart" || price.current === null) return;
     addItem({
-      variant_id: variant.id,
+      variant_id: presented.id,
       product_name: product.name,
-      product_type: variant.product_type,
-      size_ml: variant.size_ml,
-      price: effectivePrice,
+      product_type: presented.product_type,
+      size_ml: presented.size_ml,
+      price: price.current,
       image_url: imageUrl,
-      stock,
+      stock: state.units,
     });
     setAdded(true);
     if (addedTimeout.current) clearTimeout(addedTimeout.current);
     addedTimeout.current = window.setTimeout(() => setAdded(false), 1600);
   };
+
+  const hasDiscount = price.discountPercent !== null;
+  const startsFrom = status === "decants_only" && state.decantsAvailable.length > 1;
 
   return (
     <article className="animate-fadeIn group flex h-full flex-col rounded-2xl bg-krov-void/30">
@@ -148,88 +221,150 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
           />
         </Link>
 
-        {/* Badges — square, flush to the corner, stacked. */}
-        <div className="pointer-events-none absolute left-0 top-0 flex flex-col items-start">
-          {variant.is_on_offer && <Badge label="Oferta" tone="blood" />}
-          {variant.product_type === "decant" && (
-            <Badge label="Decant" tone="outline" />
+        {/* Badges — two independent corners, flush and square. Availability
+            (left) and discount (right) are different facts and never stack; the
+            left one yields width, wrapping to two lines, before it would ever
+            reach the discount. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-1">
+          <AvailabilityBadge status={status} />
+          {hasDiscount && (
+            <span className="ml-auto shrink-0 bg-krov-blood px-2 py-1 text-[10px] font-medium leading-[1.3] tabular-nums tracking-[0.04em] text-krov-void">
+              <span aria-hidden>-{price.discountPercent}%</span>
+              <span className="sr-only">{price.discountPercent}% de descuento</span>
+            </span>
           )}
-          {lowStock && <Badge label="Últimas unidades" tone="muted" />}
-          {!inStock && <Badge label="Agotado" tone="muted" />}
         </div>
 
-        {/*
-          Add to cart. Anchored to the plate's bottom-right corner as a square
-          that fills red on hover/focus. Always visible on touch (`sm:` gates
-          only the opacity fade, not the control itself), and it keeps a 44px
-          target on phones.
-        */}
-        <button
-          onClick={handleAddToCart}
-          disabled={!inStock}
-          aria-label={
-            inStock ? `Agregar ${product.name} al carrito` : "Sin stock"
-          }
-          className={`absolute bottom-0 right-0 flex h-11 w-11 items-center justify-center transition-all duration-300 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 ${
-            !inStock
-              ? "cursor-not-allowed bg-krov-void/70 text-krov-dust"
-              : added
+        {/* Corner control: one per card, chosen by the STATE. On touch it is
+            always visible (`sm:` gates only the opacity fade) and keeps a 44px
+            target. */}
+        {action === "add_to_cart" && (
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            aria-label={`Agregar ${product.name} al carrito`}
+            className={`${CORNER} ${
+              added
                 ? "bg-krov-blood text-krov-void sm:opacity-100"
-                : "bg-krov-void/90 text-krov-blush hover:bg-krov-blood hover:text-krov-void"
-          }`}
-        >
-          {added ? (
-            <Check size={16} aria-hidden />
-          ) : (
+                : CORNER_LIVE
+            }`}
+          >
+            {added ? <Check size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+          </button>
+        )}
+
+        {/* Made to order: a link, not a button — it opens WhatsApp with the
+            inquiry prefilled (a new tab, so the catalog and its filters stay put)
+            and has no connection to the cart. */}
+        {action === "whatsapp" && inquiryUrl && (
+          <a
+            href={inquiryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Consultar disponibilidad de ${product.name} por WhatsApp`}
+            title="Consultar disponibilidad por WhatsApp"
+            className={`${CORNER} ${CORNER_LIVE}`}
+          >
+            <Image
+              src="/icons/whatsapp.svg"
+              alt=""
+              width={18}
+              height={18}
+              aria-hidden
+              className="h-[18px] w-[18px]"
+            />
+          </a>
+        )}
+
+        {/* Decants only: the existing size picker lives on the product page, so
+            the control goes there with the starting decant preselected. */}
+        {action === "choose_decant" && (
+          <Link
+            href={`/products/${product.slug}?variant=${presented.id}`}
+            aria-label={`Elegir un decant de ${product.name}`}
+            title="Ver los decants disponibles"
+            className={`${CORNER} ${CORNER_LIVE}`}
+          >
             <Plus size={16} aria-hidden />
-          )}
-        </button>
+          </Link>
+        )}
+
+        {/* Nothing to buy or ask about: a restrained, disabled square. */}
+        {action === "none" && (
+          <button
+            type="button"
+            disabled
+            aria-label={status === "sold_out" ? "Sin stock" : "Precio no disponible"}
+            className={`${CORNER} cursor-not-allowed bg-krov-void/70 text-krov-dust`}
+          >
+            <Plus size={16} aria-hidden />
+          </button>
+        )}
       </div>
 
       {/* ── The type ───────────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col pt-4">
-        <p className="text-[9px] uppercase tracking-[0.28em] text-krov-rose">
+        <p className="text-[10px] uppercase tracking-[0.26em] text-krov-rose">
           {product.brands?.name ?? "KROV"}
         </p>
 
+        {/* Two lines are reserved for EVERY name, so a one-line name and a
+            two-line name leave the presentation and price at the same height
+            across a row. Long names clamp at two lines instead of one. */}
         <h3
-          className="mt-2 text-lg leading-snug text-krov-bone"
+          className="mt-2 text-[18px] leading-[1.2] text-krov-bone"
           style={{ fontFamily: serif }}
           title={product.name}
         >
           <Link
             href={`/products/${product.slug}`}
-            className="line-clamp-1 transition-colors duration-300 hover:text-krov-blush"
+            className="line-clamp-2 min-h-[2.4em] transition-colors duration-300 hover:text-krov-blush"
           >
             {product.name}
           </Link>
         </h3>
 
-        <p className="mt-1 text-[11px] tracking-[0.06em] text-krov-dust">
-          {TYPE_LABEL[variant.product_type]} · {variant.size_ml} ml
+        <p className="mt-1.5 text-[12px] tracking-[0.04em] text-krov-dust">
+          {presentationLabel(state)}
         </p>
+        {state.alsoDecants && (
+          <p className="mt-0.5 text-[11px] tracking-[0.04em] text-krov-ash">
+            También disponible en decants
+          </p>
+        )}
 
         {/* Price sits on its own line at the foot of the card so every card in a
             row aligns its price regardless of how long the name wrapped. */}
-        <div className="mt-auto flex items-baseline gap-2.5 pt-3">
-          {showWholesale ? (
+        <div className="mt-auto flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 pt-3">
+          {price.current === null ? (
+            <span className="text-[12px] text-krov-dust">Precio no disponible</span>
+          ) : showWholesale ? (
             // Wholesale buyer: retail struck through, wholesale leads in rose.
             <>
-              <span className="text-base text-krov-rose">
+              <span className="text-[17px] tabular-nums text-krov-rose">
                 {formatPrice(wholesalePrice as number)}
               </span>
-              <span className="text-[11px] text-krov-dust line-through">
-                {formatPrice(effectivePrice)}
+              <span className="text-[12px] text-krov-dust line-through">
+                {formatPrice(price.current)}
               </span>
             </>
           ) : (
             <>
-              <span className="text-base text-krov-bone">
-                {formatPrice(effectivePrice)}
+              {startsFrom && (
+                <span className="text-[11px] uppercase tracking-[0.14em] text-krov-dust">
+                  Desde{" "}
+                </span>
+              )}
+              <span
+                className={`text-[17px] tabular-nums ${
+                  status === "sold_out" ? "text-krov-ash" : "text-krov-bone"
+                }`}
+              >
+                {formatPrice(price.current)}
               </span>
-              {variant.is_on_offer && variant.offer_price && (
-                <span className="text-[11px] text-krov-dust line-through">
-                  {formatPrice(variant.price)}
+              {price.original !== null && (
+                <span className="text-[12px] tabular-nums text-krov-dust line-through">
+                  {formatPrice(price.original)}
                 </span>
               )}
             </>

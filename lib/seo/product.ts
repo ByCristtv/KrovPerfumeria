@@ -131,7 +131,9 @@ export function productImages(
 }
 
 /** Variant label as the selector shows it: "100 ml" or "5 ml · Decant". */
-export function variantLabel(variant: ProductVariant): string {
+export function variantLabel(
+  variant: Pick<ProductVariant, "size_ml" | "product_type">
+): string {
   const size = `${variant.size_ml} ml`;
   if (variant.product_type === "decant") return `${size} · Decant`;
   if (variant.product_type === "set") return `${size} · Set`;
@@ -142,6 +144,13 @@ export function variantLabel(variant: ProductVariant): string {
  * Decant stock lives in the parent's shared ml pool, not on the variant row, so
  * `variant.stock > 0` is wrong for them (it is always 0). `isInStock` is the
  * single rule the cart, checkout and detail page already use.
+ *
+ * This is PHYSICAL availability on purpose. A made-to-order ("Por encargo")
+ * variant cannot be bought on the page - only asked about on WhatsApp - so its
+ * offer is published as `OutOfStock`, exactly as before the feature existed:
+ * promising `InStock` would be false, `BackOrder`/`PreOrder` require an
+ * availability date we do not have, and `MadeToOrder` is not a value Google's
+ * product listings accept. See the made-to-order case in jsonLd.test.ts.
  */
 export function variantInStock(
   product: ProductDetailData,

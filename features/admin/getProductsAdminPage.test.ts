@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { rpcMock } = vi.hoisted(() => ({ rpcMock: vi.fn() }));
+const { rpcMock, fromMock, selectMock, inMock, supplier } = vi.hoisted(() => {
+  // What the follow-up `product_variants` read (supplier columns) resolves to.
+  const supplier = {
+    result: { data: [] as unknown[], error: null as { message: string } | null },
+  };
+  const inMock = vi.fn(async () => supplier.result);
+  const selectMock = vi.fn(() => ({ in: inMock }));
+  const fromMock = vi.fn(() => ({ select: selectMock }));
+  return { rpcMock: vi.fn(), fromMock, selectMock, inMock, supplier };
+});
 
 // `createClient` is the request-bound SERVER client (it reads cookies), so the
 // module is replaced wholesale rather than stubbing a transport underneath it.
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ rpc: rpcMock }),
+  createClient: async () => ({ rpc: rpcMock, from: fromMock }),
 }));
 
 import { getProductsAdminPage } from "./getProductsAdminPage";
@@ -37,7 +46,128 @@ function rawRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe("getProductsAdminPage", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    supplier.result = { data: [], error: null };
+  });
+
+  // ── Phase 4: supplier availability ───────────────────────────────────────
+  describe("supplier availability", () => {
+    it("reads the supplier columns only for the variants on this page", async () => {
+      rpcMock.mockResolvedValue({
+        data: [
+          rawRow({ variant_id: "v-1", total_count: 2 }),
+          rawRow({ variant_id: "v-2", total_count: 2 }),
+        ],
+        error: null,
+      });
+
+      await getProductsAdminPage(1);
+
+      expect(fromMock).toHaveBeenCalledWith("product_variants");
+      expect(selectMock).toHaveBeenCalledWith("id, supplier_available, supplier_checked_at");
+      expect(inMock).toHaveBeenCalledWith("id", ["v-1", "v-2"]);
+    });
+
+    it("merges each variant's flag and last-checked time onto its row", async () => {
+      rpcMock.mockResolvedValue({
+        data: [
+          rawRow({ variant_id: "v-1", total_count: 3 }),
+          rawRow({ variant_id: "v-2", total_count: 3 }),
+          rawRow({ variant_id: "v-3", total_count: 3 }),
+        ],
+        error: null,
+      });
+      supplier.result = {
+        data: [
+          { id: "v-1", supplier_available: true, supplier_checked_at: "2026-10-28T10:00:00Z" },
+          { id: "v-2", supplier_available: false, supplier_checked_at: "2026-10-27T10:00:00Z" },
+          { id: "v-3", supplier_available: false, supplier_checked_at: null },
+        ],
+        error: null,
+      };
+
+      const { rows } = await getProductsAdminPage(1);
+
+      expect(rows.map((r) => [r.supplier_available, r.supplier_checked_at])).toEqual([
+        [true, "2026-10-28T10:00:00Z"],
+        [false, "2026-10-27T10:00:00Z"],
+        [false, null], // never verified
+      ]);
+    });
+
+    it("never touches the physical stock it shows", async () => {
+      rpcMock.mockResolvedValue({ data: [rawRow({ stock: 7 })], error: null });
+      supplier.result = {
+        data: [{ id: "v-1", supplier_available: true, supplier_checked_at: null }],
+        error: null,
+      };
+
+      const { rows } = await getProductsAdminPage(1);
+
+      expect(rows[0].stock).toBe(7);
+    });
+
+    it("skips the extra read entirely for an empty page", async () => {
+      rpcMock.mockResolvedValue({ data: [], error: null });
+
+      await getProductsAdminPage(1);
+
+      expect(fromMock).not.toHaveBeenCalled();
+    });
+
+    it("leaves the fields UNKNOWN (not false) when the read fails, e.g. migration pending", async () => {
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      rpcMock.mockResolvedValue({ data: [rawRow()], error: null });
+      supplier.result = {
+        data: [],
+        error: { message: "column product_variants.supplier_available does not exist" },
+      };
+
+      const { rows, total } = await getProductsAdminPage(1);
+
+      // The page still renders every row...
+      expect(rows).toHaveLength(1);
+      expect(total).toBe(1);
+      expect(rows[0].sku).toBe("SKU-1");
+      // ...but "could not load" is not reported as "sold out at the supplier".
+      expect(rows[0].supplier_available).toBeUndefined();
+      expect(rows[0].supplier_checked_at).toBeUndefined();
+      expect(consoleError).toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it("leaves a variant the read did not return unknown rather than defaulting it", async () => {
+      rpcMock.mockResolvedValue({
+        data: [
+          rawRow({ variant_id: "v-1", total_count: 2 }),
+          rawRow({ variant_id: "v-2", total_count: 2 }),
+        ],
+        error: null,
+      });
+      supplier.result = {
+        data: [{ id: "v-1", supplier_available: true, supplier_checked_at: null }],
+        error: null,
+      };
+
+      const { rows } = await getProductsAdminPage(1);
+
+      expect(rows[0].supplier_available).toBe(true);
+      expect(rows[1].supplier_available).toBeUndefined();
+    });
+
+    it("only a stored true counts as available", async () => {
+      rpcMock.mockResolvedValue({ data: [rawRow()], error: null });
+      supplier.result = {
+        data: [{ id: "v-1", supplier_available: null, supplier_checked_at: null }],
+        error: null,
+      };
+
+      const { rows } = await getProductsAdminPage(1);
+
+      expect(rows[0].supplier_available).toBe(false);
+    });
+  });
 
   it("asks the RPC for the requested window", async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });

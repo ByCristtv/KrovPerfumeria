@@ -2,7 +2,11 @@
 
 import { useMemo, useState, useCallback } from "react";
 import type { ProductDetailData, ProductVariant } from "@/types/product";
-import { availableUnits } from "@/lib/stock";
+import {
+  availableUnits,
+  resolveAvailability,
+  type Availability,
+} from "@/lib/stock";
 
 export interface UseProductSelectionReturn {
   sortedVariants: ProductVariant[];
@@ -18,6 +22,13 @@ export interface UseProductSelectionReturn {
   outOfStock: boolean;
   /** Sellable units of the selected variant (decant-aware). */
   availableStock: number;
+  /**
+   * What the selected variant is to a customer (in stock / made to order / sold
+   * out) and which action it gets. `outOfStock` above only means "KROV has no
+   * units" - it is true for made-to-order variants too - so decide the CTA from
+   * this, never from `outOfStock`.
+   */
+  availability: Availability;
 }
 
 /**
@@ -83,6 +94,10 @@ export function useProductSelection(
     ? (selectedVariant.offer_price as number)
     : selectedVariant.price;
   const outOfStock = availableStock <= 0;
+  const availability = resolveAvailability(
+    selectedVariant,
+    product.decant_stock_ml
+  );
 
   return {
     sortedVariants,
@@ -96,5 +111,6 @@ export function useProductSelection(
     hasOffer,
     outOfStock,
     availableStock,
+    availability,
   };
 }

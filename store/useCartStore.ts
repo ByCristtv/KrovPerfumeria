@@ -11,6 +11,12 @@ export const useCartStore = create<CartStore>()(
       setCart: (cart) => set({ cart }),
 
       addItem: (newItem) => {
+        // Defense in depth: nothing KROV cannot ship from its own inventory may
+        // enter the cart, whichever UI path (or stale caller) got here. A
+        // made-to-order variant has zero units, so it is refused like any
+        // sold-out line; the server (place_order) refuses it again at checkout.
+        if (!(newItem.stock > 0)) return;
+
         const { cart } = get();
         const existing = cart.find((i) => i.variant_id === newItem.variant_id);
 

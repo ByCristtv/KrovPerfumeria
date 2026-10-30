@@ -28,6 +28,11 @@ type CatalogQuery = ReturnType<typeof buildBaseQuery>;
  * its featured (primary) variant and the parent's first image. Variant choice
  * happens on the detail page, not the catalog.
  *
+ * Each card also carries ALL of the product's active variants (`variants`): the
+ * card has to know whether the bottle can be had some other way - ordered from
+ * the supplier, or poured as a decant - before it can say "Agotado". Sorting,
+ * the wholesale filter and pagination still work on the featured variant alone.
+ *
  * `categories!inner` is only used when filtering by category, so PostgREST
  * prunes products that don't match; otherwise we left-join so uncategorised
  * products still appear.
@@ -62,18 +67,39 @@ function buildSelect(filterByCategory: boolean, filterByWholesale: boolean): str
       is_on_offer,
       stock,
       size_ml,
-      product_type
+      product_type,
+      sku,
+      supplier_available
+    ),
+    variants:product_variants!product_variants_product_id_fkey (
+      id,
+      price,
+      offer_price,
+      is_on_offer,
+      stock,
+      size_ml,
+      product_type,
+      sku,
+      supplier_available
     ),
     product_images ( url, position )
   `;
 }
 
-/** Active-products base query with an exact count for precise pagination. */
+/**
+ * Active-products base query with an exact count for precise pagination.
+ *
+ * `variants.is_active` prunes only the EMBEDDED rows (no `!inner`), so a product
+ * still lists whatever its active variants are. RLS already hides inactive
+ * variants from visitors; the explicit filter keeps an admin browsing the
+ * storefront from seeing deactivated sizes counted as "available".
+ */
 function buildBaseQuery(filterByCategory: boolean, filterByWholesale: boolean) {
   return supabase
     .from("products")
     .select(buildSelect(filterByCategory, filterByWholesale), { count: "exact" })
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("variants.is_active", true);
 }
 
 /**

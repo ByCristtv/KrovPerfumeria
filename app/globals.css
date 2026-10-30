@@ -823,23 +823,35 @@ body > * {
   }
 
   /*
-   * ── Floating cart ⇄ StickyPurchaseBar coordination ──────────────────────────
+   * ── Mobile cart bar ⇄ StickyPurchaseBar, and the space the bar reserves ─────
    *
-   * The mobile floating cart (Navbar) sits bottom-right; the product page's
-   * StickyPurchaseBar is a full-width bar pinned to the same bottom edge, so its
-   * "Agregar" button collided with the cart. StickyPurchaseBar toggles
-   * `.purchase-bar-open` on <html> while it is visible; the cart lifts clear of
-   * the bar instead of overlapping it. Decoupled via a root class so the two
-   * components need no shared React state. Only `bottom` on one small element,
+   * The mobile cart (MobileCartBar) is a slim bar pinned to the bottom edge. The
+   * product page's StickyPurchaseBar is a full-width bar on the same edge, so the
+   * cart bar steps out of its way: StickyPurchaseBar toggles
+   * `.purchase-bar-open` on <html> while it is visible, and the cart bar slides
+   * off-screen (and stops catching taps) for that time. Decoupled via a root
+   * class, so the two components need no shared React state. Only `transform`,
    * toggled on visibility (not per frame), so the cost is negligible.
+   *
+   * While the cart bar exists it adds `.has-cart-bar` to <html>, and the body
+   * reserves the bar's strip (plus the bottom safe-area inset), so the end of
+   * every page - last row, pagination, footer - scrolls clear of it instead of
+   * ending underneath it. Below `lg` only, which is where the bar renders.
    */
-  .floating-cart {
-    transition:
-      bottom 300ms cubic-bezier(.22, 1, .36, 1),
-      transform 150ms ease;
+  .cart-bar {
+    /* Clear the home indicator when the page is laid out under it; 0 otherwise. */
+    padding-bottom: calc(0.875rem + env(safe-area-inset-bottom, 0px));
+    transition: transform 300ms cubic-bezier(.22, 1, .36, 1);
   }
 
-  .purchase-bar-open .floating-cart {
-    bottom: 6.75rem;
+  .purchase-bar-open .cart-bar {
+    transform: translateY(110%);
+    pointer-events: none;
+  }
+
+  @media (max-width: 1023.98px) {
+    html.has-cart-bar body {
+      padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    }
   }
 }

@@ -8,6 +8,8 @@ import { useAuthUser } from "@/hooks/useAuthUser";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useIsMounted } from "@/hooks/useIsMounted";
 import KrovLogo from "@/components/brand/KrovLogo";
+import BagIcon from "./BagIcon";
+import MobileCartBar from "./MobileCartBar";
 import {
   AUTH_NAV_LINKS,
   HOME_HREF,
@@ -283,21 +285,9 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Floating mobile cart */}
-      {mounted && (
-        <Link
-          href="/cart"
-          aria-label={`Carrito, ${cartBadge} artículos`}
-          className="floating-cart fixed bottom-6 right-6 z-50 lg:hidden flex h-14 w-14 items-center justify-center bg-krov-blood text-krov-void shadow-[0_10px_40px_-8px_rgba(255,11,85,0.55)] transition-transform active:scale-95"
-        >
-          <BagIcon className="h-5 w-5" />
-          {cartBadge > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center border border-krov-blood bg-krov-void px-1 text-[10px] font-medium text-krov-blush">
-              {cartBadge}
-            </span>
-          )}
-        </Link>
-      )}
+      {/* Mobile cart: a bottom bar, only while the cart has items. `cartBadge`
+          is 0 until mounted, so nothing renders during SSR / hydration. */}
+      <MobileCartBar count={cartBadge} />
     </>
   );
 }
@@ -425,22 +415,3 @@ function MobileAction({
   );
 }
 
-function BagIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"
-      />
-    </svg>
-  );
-}

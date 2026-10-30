@@ -38,7 +38,9 @@ export const getProductBySlug = cache(async function getProductBySlug(
         stock,
         size_ml,
         product_type,
-        position
+        position,
+        sku,
+        supplier_available
       ),
       product_images ( url, position, alt_text, variant_id )
     `

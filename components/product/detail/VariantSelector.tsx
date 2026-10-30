@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProductTypes, ProductVariant } from "@/types/product";
-import { availableUnits } from "@/lib/stock";
+import { resolveAvailability, type AvailabilityStatus } from "@/lib/stock";
 
 interface VariantSelectorProps {
   variants: ProductVariant[];
@@ -69,7 +69,7 @@ export default function VariantSelector({
                 key={v.id}
                 variant={v}
                 selected={v.id === selectedId}
-                disabled={availableUnits(v, decantPoolMl) <= 0}
+                status={resolveAvailability(v, decantPoolMl).status}
                 onClick={() => onSelect(v)}
               />
             ))}
@@ -83,7 +83,11 @@ export default function VariantSelector({
 interface VariantCardProps {
   variant: ProductVariant;
   selected: boolean;
-  disabled: boolean;
+  /**
+   * Only a sold-out size is unselectable. A made-to-order size must stay
+   * pressable - it is how the customer reaches its "Por encargo" inquiry.
+   */
+  status: AvailabilityStatus;
   onClick: () => void;
 }
 
@@ -95,7 +99,8 @@ interface VariantCardProps {
  * compared, and a card that bounces makes the comparison harder to hold in the
  * eye. The entire state change is colour, settled in 250ms.
  */
-function VariantCard({ variant, selected, disabled, onClick }: VariantCardProps) {
+function VariantCard({ variant, selected, status, onClick }: VariantCardProps) {
+  const disabled = status === "sold_out";
   return (
     <button
       type="button"
@@ -120,9 +125,14 @@ function VariantCard({ variant, selected, disabled, onClick }: VariantCardProps)
         <span className="text-[9px] uppercase tracking-[0.18em] text-krov-dust">
           {TYPE_LABEL[variant.product_type] || variant.product_type}
         </span>
-        {disabled && (
+        {status === "sold_out" && (
           <span className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-krov-ash">
             Agotado
+          </span>
+        )}
+        {status === "made_to_order" && (
+          <span className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-krov-rose">
+            Por encargo
           </span>
         )}
       </span>

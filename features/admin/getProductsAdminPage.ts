@@ -30,6 +30,51 @@ interface RawVariantRow {
   total_count: number;
 }
 
+interface SupplierState {
+  supplier_available: boolean;
+  supplier_checked_at: string | null;
+}
+
+/**
+ * The supplier-availability columns for the variants on this page.
+ *
+ * A second, narrow read instead of widening `admin_list_product_variants`: that
+ * RPC is a SECURITY DEFINER function whose live body is hand-applied and cannot
+ * be inspected from the repo, and replacing it just to add two columns would
+ * also re-apply everything else in its newest definition. Twenty ids by primary
+ * key is a trivial query, and this one degrades on its own.
+ *
+ * Returns `null` on any failure - most usefully "column does not exist" while
+ * the supplier migration is still pending - so the table renders without the
+ * supplier control instead of failing the whole page.
+ */
+async function fetchSupplierState(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  variantIds: string[]
+): Promise<Map<string, SupplierState> | null> {
+  if (variantIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("product_variants")
+    .select("id, supplier_available, supplier_checked_at")
+    .in("id", variantIds);
+
+  if (error) {
+    console.error("getProductsAdminPage supplier state failed:", error.message);
+    return null;
+  }
+
+  return new Map(
+    (data ?? []).map((v) => [
+      v.id,
+      {
+        supplier_available: v.supplier_available === true,
+        supplier_checked_at: v.supplier_checked_at ?? null,
+      },
+    ])
+  );
+}
+
 /**
  * Fetch one page of product variants for the admin table.
  *
@@ -75,6 +120,11 @@ export async function getProductsAdminPage(
   const total = raw.length > 0 ? Number(raw[0].total_count) : 0;
   const { currentPage, totalPages } = paginate(total, page, pageSize);
 
+  const supplier = await fetchSupplierState(
+    supabase,
+    raw.map((v) => v.variant_id)
+  );
+
   const rows: AdminVariantRow[] = raw.map((v) => ({
     variant_id: v.variant_id,
     product_id: v.product_id,
@@ -88,6 +138,10 @@ export async function getProductsAdminPage(
     is_active: !!v.is_active,
     wholesale_price: v.wholesale_price ?? null,
     min_wholesale_quantity: v.min_wholesale_quantity ?? null,
+    // Left undefined (not false) when unknown, so the table can tell "verified
+    // sold out / never verified" apart from "could not be loaded".
+    supplier_available: supplier?.get(v.variant_id)?.supplier_available,
+    supplier_checked_at: supplier?.get(v.variant_id)?.supplier_checked_at,
     name: v.name ?? "Sin nombre",
     description: v.description ?? null,
     brand: v.brand ?? "Sin marca",

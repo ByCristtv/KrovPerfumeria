@@ -682,27 +682,68 @@ export type Database = {
       }
       processed_webhooks: {
         Row: {
+          attempts: number
+          effects_applied_at: string | null
           event_id: string
+          event_type: string | null
           id: string
+          last_error: string | null
+          locked_until: string | null
+          order_id: string | null
+          outcome: string | null
           payload_hash: string | null
-          processed_at: string
+          payment_intent_id: string | null
+          processed_at: string | null
           provider: string
+          received_at: string
+          status: string
+          updated_at: string
         }
         Insert: {
+          attempts?: number
+          effects_applied_at?: string | null
           event_id: string
+          event_type?: string | null
           id?: string
+          last_error?: string | null
+          locked_until?: string | null
+          order_id?: string | null
+          outcome?: string | null
           payload_hash?: string | null
-          processed_at?: string
+          payment_intent_id?: string | null
+          processed_at?: string | null
           provider: string
+          received_at?: string
+          status?: string
+          updated_at?: string
         }
         Update: {
+          attempts?: number
+          effects_applied_at?: string | null
           event_id?: string
+          event_type?: string | null
           id?: string
+          last_error?: string | null
+          locked_until?: string | null
+          order_id?: string | null
+          outcome?: string | null
           payload_hash?: string | null
-          processed_at?: string
+          payment_intent_id?: string | null
+          processed_at?: string | null
           provider?: string
+          received_at?: string
+          status?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "processed_webhooks_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_categories: {
         Row: {
@@ -795,6 +836,8 @@ export type Database = {
           size_ml: number
           sku: string
           stock: number
+          supplier_available: boolean
+          supplier_checked_at: string | null
           updated_at: string
           wholesale_price: number | null
         }
@@ -813,6 +856,8 @@ export type Database = {
           size_ml: number
           sku: string
           stock?: number
+          supplier_available?: boolean
+          supplier_checked_at?: string | null
           updated_at?: string
           wholesale_price?: number | null
         }
@@ -831,6 +876,8 @@ export type Database = {
           size_ml?: number
           sku?: string
           stock?: number
+          supplier_available?: boolean
+          supplier_checked_at?: string | null
           updated_at?: string
           wholesale_price?: number | null
         }
@@ -1410,6 +1457,25 @@ export type Database = {
           total_units: number
         }[]
       }
+      apply_onvo_payment_failed: {
+        Args: {
+          p_intent_id: string
+          p_order_id: string
+          p_terminal: boolean
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
+      apply_onvo_payment_succeeded: {
+        Args: {
+          p_amount: number
+          p_currency: string
+          p_intent_id: string
+          p_order_id: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
       apply_order_coupon: {
         Args: { p_order_id: string; p_user_coupon_id: string }
         Returns: Json
@@ -1453,6 +1519,26 @@ export type Database = {
         Returns: string
       }
       claim_user_coupon: { Args: { p_user_coupon_id: string }; Returns: Json }
+      claim_webhook_event: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_lease_seconds?: number
+          p_payload_hash?: string
+          p_payment_intent_id?: string
+          p_provider: string
+        }
+        Returns: Json
+      }
+      complete_webhook_event: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_outcome?: string
+          p_status: string
+        }
+        Returns: boolean
+      }
       create_new_product: {
         Args: {
           p_brand_id: string
@@ -1591,6 +1677,10 @@ export type Database = {
       }
       release_order_coupon: { Args: { p_order_id: string }; Returns: boolean }
       remove_friend: { Args: { p_friend_user_id: string }; Returns: boolean }
+      resolve_onvo_intent_order: {
+        Args: { p_intent_id: string; p_order_hint: string }
+        Returns: Json
+      }
       restore_variant_stock: { Args: { p_order_id: string }; Returns: Json }
       review_wholesale_application: {
         Args: { p_decision: string; p_user_id: string }

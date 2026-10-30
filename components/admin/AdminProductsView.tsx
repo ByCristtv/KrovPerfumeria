@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
 import ProductForm from "./ProductForm";
 import VariantForm from "./VariantForm";
@@ -11,6 +12,7 @@ import AdminContainer from "./ui/AdminContainer";
 import AdminPageHeader from "./ui/AdminPageHeader";
 import Pagination from "./ui/Pagination";
 import { SEARCH_PARAM, PAGE_PARAM, buildQuery } from "@/lib/pagination";
+import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
 import type { AdminVariantRow } from "@/types/product";
 
 interface Props {
@@ -40,6 +42,7 @@ export default function AdminProductsView({
   to,
 }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -65,8 +68,13 @@ export default function AdminProductsView({
     setEditTarget(null);
   };
 
-  // Re-fetch the current server page after a create/edit/toggle.
-  const refresh = () => router.refresh();
+  // Re-fetch the current server page after a create/edit/toggle (this table is
+  // server-rendered), and drop the cached public catalog feed: it carries each
+  // featured variant's stock and supplier flag, so it is stale after any of them.
+  const refresh = () => {
+    router.refresh();
+    void queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() });
+  };
 
   const onModalSuccess = () => {
     closeModal();

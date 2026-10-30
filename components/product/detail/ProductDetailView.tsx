@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCart } from "@/hooks/useCart";
 import { useProductSelection } from "@/hooks/useProductSelection";
 import { useWholesalePricingMap } from "@/hooks/useWholesalePricingMap";
+import { buildProductInquiryUrl } from "@/lib/whatsapp/productInquiry";
 import type { ProductCardData, ProductDetailData } from "@/types/product";
 
 import AmbientBackground from "./AmbientBackground";
@@ -53,8 +54,36 @@ export default function ProductDetailView({
     [...product.product_images].sort((a, b) => a.position - b.position)[0]?.url ||
     "/placeholder.png";
 
+  // Made-to-order only: the WhatsApp inquiry for the SELECTED size, at the
+  // published (retail, offer-aware) price the panel shows. `null` otherwise, so
+  // nothing downstream can render an inquiry for an in-stock or sold-out size.
+  const inquiryUrl = useMemo(
+    () =>
+      sel.availability.canInquire
+        ? buildProductInquiryUrl({
+            productName: product.name,
+            brand: product.brands?.name,
+            sizeMl: sel.selectedVariant.size_ml,
+            productType: sel.selectedVariant.product_type,
+            sku: sel.selectedVariant.sku,
+            price: sel.effectivePrice,
+            slug: product.slug,
+          })
+        : null,
+    [
+      sel.availability.canInquire,
+      sel.selectedVariant,
+      sel.effectivePrice,
+      product.name,
+      product.brands,
+      product.slug,
+    ]
+  );
+
   const handleAdd = useCallback(() => {
-    if (sel.outOfStock) return;
+    // The one gate between this page and the cart: only a variant KROV can ship
+    // from its own inventory gets through (made-to-order and sold-out do not).
+    if (!sel.availability.canAddToCart) return;
     const v = sel.selectedVariant;
     for (let i = 0; i < sel.quantity; i++) {
       addItem({
@@ -117,7 +146,8 @@ export default function ProductDetailView({
               onSetQuantity={sel.setQuantity}
               effectivePrice={sel.effectivePrice}
               hasOffer={sel.hasOffer}
-              outOfStock={sel.outOfStock}
+              availability={sel.availability}
+              inquiryUrl={inquiryUrl}
               availableStock={sel.availableStock}
               onAddToCart={handleAdd}
               wholesaleEligible={wholesaleEligible}
@@ -157,8 +187,9 @@ export default function ProductDetailView({
           sel.selectedVariant.product_type
         }`}
         price={sel.effectivePrice}
+        status={sel.availability.status}
         onAdd={handleAdd}
-        disabled={sel.outOfStock}
+        inquiryUrl={inquiryUrl}
       />
     </>
   );
