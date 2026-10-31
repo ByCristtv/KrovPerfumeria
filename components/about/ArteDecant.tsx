@@ -12,7 +12,7 @@ export default function ArteDecant() {
         <div className="relative aspect-16/8 w-full overflow-hidden mb-16">
           <Image
             src="/images/about/DecantsAbout.avif"
-            alt="Atomizadores de 2ml, 5ml y 10ml junto a jeringas de precisión y una botella de lujo siendo decantada"
+            alt="Atomizadores de 3ml, 5ml y 10ml junto a jeringas de precisión y una botella de lujo siendo decantada"
             fill
             className="object-cover"
             sizes="(min-width: 1280px) 1200px, 100vw"

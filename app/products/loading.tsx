@@ -1,4 +1,3 @@
-import CatalogHero from "@/components/catalog/CatalogHero";
 import {
   Bone,
   LoadingAnnouncement,
@@ -14,10 +13,7 @@ const PLACEHOLDER_CARDS = 8;
  * and every filter change — each is a new URL).
  *
  * Mirrors `app/products/page.tsx` element for element:
- * · the REAL `CatalogHero` (a server component with no data), so the space
- *   above the toolbar can never drift from the page again — the previous
- *   skeleton drew a title the hero no longer has, and the grid jumped up
- *   ~150px when the data landed;
+ * · the same top padding (header clearance), with no masthead;
  * · the toolbar's shell at its collapsed height (search field + Filtros);
  * · the result-count rule;
  * · cards built from the same plate + type rhythm as `ProductCard`.
@@ -32,9 +28,7 @@ export default function CatalogLoading() {
       <LoadingAnnouncement label="Cargando el catálogo…" />
 
       <div className="relative">
-        <CatalogHero asHeading={false} />
-
-        <div className="mx-auto max-w-7xl px-5 pb-24 sm:px-8">
+        <div className="mx-auto max-w-7xl px-5 pb-24 pt-24 sm:px-8 md:pt-28">
           {/* Toolbar: the real shell, not a bone — it is chrome the user
               already knows, and keeping it solid stops the page from reading as
               "everything is missing". Only its controls are placeholders. The

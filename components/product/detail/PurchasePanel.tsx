@@ -219,9 +219,7 @@ function MadeToOrderNotice() {
         Por encargo
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-krov-ash md:mt-2 md:text-[13px]">
-        Este perfume no está en nuestro inventario: lo gestionamos con nuestro
-        proveedor. Antes de finalizar tu compra confirmamos por WhatsApp si
-        sigue disponible y cuál sería el plazo de entrega.
+        Tiempo estimado de entrega: 1 a 3 dias
       </p>
     </div>
   );

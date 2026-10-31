@@ -9,7 +9,6 @@ import {
 import { catalogSeo } from "@/lib/seo/catalog";
 import { LANDING_LIST } from "@/lib/seo/landings";
 import { buildPageMetadata } from "@/lib/seo/metadata";
-import CatalogHero from "@/components/catalog/CatalogHero";
 import CatalogToolbar from "@/components/catalog/CatalogToolbar";
 import CatalogResults from "@/components/catalog/CatalogResults";
 import CatalogLinks from "@/components/catalog/CatalogLinks";
@@ -59,9 +58,11 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
       />
 
       <div className="relative">
-        <CatalogHero />
+        {/* No visible masthead: the toolbar and grid lead. The <h1> stays for
+            search engines and screen readers. */}
+        <h1 className="sr-only">Perfumes originales en Costa Rica</h1>
 
-        <div className="mx-auto max-w-7xl px-5 pb-24 sm:px-8">
+        <div className="mx-auto max-w-7xl px-5 pb-24 pt-24 sm:px-8 md:pt-28">
           <CatalogToolbar filters={filters} />
 
           <CatalogResults result={result} filtered={filtered} />
