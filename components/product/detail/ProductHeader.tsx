@@ -38,14 +38,16 @@ export default function ProductHeader({
         </p>
       )}
 
+      {/* Phone scale: ~28px, so even a three-word name stays at two lines. The
+          display size returns at `sm`. */}
       <h1
-        className="mt-4 text-4xl leading-[1.02] text-krov-bone sm:text-5xl"
+        className="mt-1.5 text-[1.75rem] leading-[1.08] text-krov-bone sm:mt-4 sm:text-5xl sm:leading-[1.02]"
         style={{ fontFamily: serif }}
       >
         {name}
       </h1>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2.5">
+      <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-5 sm:gap-2.5">
         <Chip>{concentration}</Chip>
         <Chip>{GENDER_LABEL[gender]}</Chip>
       </div>
@@ -55,7 +57,7 @@ export default function ProductHeader({
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center border border-krov-smoke px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-krov-ash">
+    <span className="inline-flex items-center border border-krov-smoke px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-krov-ash sm:px-3 sm:py-1.5">
       {children}
     </span>
   );

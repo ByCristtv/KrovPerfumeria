@@ -18,9 +18,9 @@ export default function ProductDescription({
   return (
     <section className="relative mx-auto max-w-3xl">
       <p className="krov-eyebrow">Descripción</p>
-      <span aria-hidden className="mt-5 block h-px w-16 bg-krov-blood" />
+      <span aria-hidden className="mt-3 block h-px w-16 bg-krov-blood sm:mt-5" />
       <p
-        className="mt-7 whitespace-pre-line text-xl leading-relaxed text-krov-ash sm:text-2xl"
+        className="mt-4 whitespace-pre-line text-lg leading-relaxed text-krov-ash sm:mt-7 sm:text-2xl"
         style={{ fontFamily: serif }}
       >
         {description}

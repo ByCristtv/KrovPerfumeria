@@ -30,7 +30,7 @@ export default function QuantityStepper({
       >
         −
       </StepBtn>
-      <span className="w-10 text-center text-sm tabular-nums text-krov-bone">
+      <span className="grid w-8 place-items-center text-center text-sm tabular-nums text-krov-bone md:block md:w-10">
         {quantity}
       </span>
       <StepBtn
@@ -61,7 +61,7 @@ function StepBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="grid h-11 w-11 place-items-center text-base text-krov-ash transition-colors hover:bg-krov-graphite hover:text-krov-bone disabled:opacity-25 disabled:hover:bg-transparent"
+      className="grid h-12 w-10 place-items-center md:h-11 md:w-11 text-base text-krov-ash transition-colors hover:bg-krov-graphite hover:text-krov-bone disabled:opacity-25 disabled:hover:bg-transparent"
     >
       {children}
     </button>

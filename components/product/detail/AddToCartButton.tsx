@@ -61,12 +61,12 @@ export default function AddToCartButton({
   };
 
   return (
-    <div className="relative">
+    <div className="relative h-full">
       <button
         type="button"
         onClick={handleClick}
         disabled={disabled}
-        className={`relative w-full overflow-hidden px-8 py-4 text-[11px] font-medium uppercase tracking-[0.24em] transition-colors duration-300 ${
+        className={`relative h-full min-h-12 w-full overflow-hidden md:h-auto md:min-h-0 whitespace-nowrap px-3 py-3.5 text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 md:px-8 md:py-4 md:tracking-[0.24em] ${
           disabled
             ? "cursor-not-allowed border border-krov-smoke text-krov-dust"
             : confirmed

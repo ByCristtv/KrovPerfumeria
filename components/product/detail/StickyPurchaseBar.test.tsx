@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AvailabilityStatus } from "@/lib/stock";
 import StickyPurchaseBar from "./StickyPurchaseBar";
@@ -64,14 +64,57 @@ describe("StickyPurchaseBar", () => {
     expect(button(/Agregar|Agotado/)).not.toBeInTheDocument();
   });
 
-  it("sold out: a disabled Agotado button and no inquiry", () => {
+  it("sold out: no bar and no purchase action at all, even if a link is passed", () => {
     const onAdd = setup("sold_out", URL);
 
-    const sold = button("Agotado")!;
-    expect(sold).toBeDisabled();
+    expect(button(/Agregar|Agotado/)).not.toBeInTheDocument();
     expect(link(/Consultar/)).not.toBeInTheDocument();
-
-    fireEvent.click(sold);
+    expect(screen.queryByText("Lion")).not.toBeInTheDocument();
     expect(onAdd).not.toHaveBeenCalled();
+  });
+});
+
+describe("StickyPurchaseBar visibility", () => {
+  type Callback = (entries: Array<{ isIntersecting: boolean }>) => void;
+  let trigger: Callback = () => {};
+  const observe = vi.fn();
+  const disconnect = vi.fn();
+
+  beforeEach(() => {
+    observe.mockClear();
+    disconnect.mockClear();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      vi.fn(function (cb: Callback) {
+        trigger = cb;
+        return { observe, disconnect, unobserve: vi.fn() };
+      })
+    );
+  });
+
+  it("slides in only while the page's own CTA is off-screen", () => {
+    const target = document.createElement("div");
+    const { container } = render(
+      <StickyPurchaseBar
+        productName="Lion"
+        variantLabel="100 ml · Full size"
+        price={21_000}
+        status="in_stock"
+        onAdd={vi.fn()}
+        inquiryUrl={null}
+        watchRef={{ current: target }}
+      />
+    );
+    const bar = container.firstElementChild as HTMLElement;
+    expect(observe).toHaveBeenCalledWith(target);
+    expect(bar).toHaveAttribute("aria-hidden", "true");
+
+    act(() => trigger([{ isIntersecting: false }]));
+    expect(bar).toHaveAttribute("aria-hidden", "false");
+    expect(document.documentElement).toHaveClass("purchase-bar-open");
+
+    act(() => trigger([{ isIntersecting: true }]));
+    expect(bar).toHaveAttribute("aria-hidden", "true");
+    expect(document.documentElement).not.toHaveClass("purchase-bar-open");
   });
 });

@@ -47,10 +47,10 @@ export default function FragranceNotes({ top, middle, base }: FragranceNotesProp
 
   return (
     <section className="relative mx-auto max-w-3xl">
-      <header className="mb-10">
+      <header className="mb-5 sm:mb-10">
         <p className="krov-eyebrow">La pirámide olfativa</p>
         <h2
-          className="mt-5 text-3xl text-krov-bone sm:text-4xl"
+          className="mt-3 text-2xl text-krov-bone sm:mt-5 sm:text-4xl"
           style={{ fontFamily: serif }}
         >
           Cómo se <span className="italic text-krov-blush">revela</span>
@@ -64,7 +64,7 @@ export default function FragranceNotes({ top, middle, base }: FragranceNotesProp
           return (
             <li
               key={tier.key}
-              className="grid grid-cols-[auto_1fr] gap-x-5 border-b border-krov-smoke py-7 sm:grid-cols-[auto_10rem_1fr] sm:gap-x-8"
+              className="grid grid-cols-[auto_1fr] gap-x-5 border-b border-krov-smoke py-5 sm:py-7 sm:grid-cols-[auto_10rem_1fr] sm:gap-x-8"
             >
               <span
                 aria-hidden

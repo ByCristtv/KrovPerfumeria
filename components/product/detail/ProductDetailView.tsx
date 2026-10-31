@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useCart } from "@/hooks/useCart";
 import { useProductSelection } from "@/hooks/useProductSelection";
@@ -37,6 +37,9 @@ export default function ProductDetailView({
 }: ProductDetailViewProps) {
   const { addItem } = useCart();
   const sel = useProductSelection(product, initialVariantId);
+  // The quantity + CTA block; the mobile purchase bar appears when it leaves
+  // the screen.
+  const actionRef = useRef<HTMLDivElement>(null);
 
   // Wholesale B2B pricing for this product's variants — fetched only for
   // approved buyers (see hook). The selected variant's row drives the panel.
@@ -102,14 +105,18 @@ export default function ProductDetailView({
     <>
       <AmbientBackground />
 
-      <div className="relative pt-24 pb-24 sm:pt-28 sm:pb-32">
+      {/* Phone spacing is deliberately tight above the fold (the header is 80px;
+          the product starts right under it) and the bottom padding clears the
+          fixed purchase bar. `sm` and up keep the original editorial spacing. */}
+      <div className="relative pt-[5.25rem] pb-28 sm:pt-28 sm:pb-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Breadcrumb — the trail back out. Kept as real links with a visible
               separator so a visitor who arrived from search can always find the
-              catalogue without reaching for the browser back button. */}
+              catalogue without reaching for the browser back button. One line:
+              the product name truncates rather than wrapping a second row. */}
           <nav
             aria-label="Migas"
-            className="mb-10 text-[10px] uppercase tracking-[0.24em] text-krov-dust"
+            className="mb-3 flex items-center whitespace-nowrap text-[10px] uppercase tracking-[0.24em] text-krov-dust sm:mb-10"
           >
             <Link href="/" className="transition-colors hover:text-krov-bone">
               KROV
@@ -126,11 +133,11 @@ export default function ProductDetailView({
             <span className="mx-2.5 text-krov-smoke" aria-hidden>
               /
             </span>
-            <span className="text-krov-rose">{product.name}</span>
+            <span className="min-w-0 truncate text-krov-rose">{product.name}</span>
           </nav>
 
           {/* Hero: gallery + purchase */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16">
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-10 lg:gap-16">
             <ProductGallery
               images={product.product_images}
               productName={product.name}
@@ -150,6 +157,7 @@ export default function ProductDetailView({
               inquiryUrl={inquiryUrl}
               availableStock={sel.availableStock}
               onAddToCart={handleAdd}
+              actionRef={actionRef}
               wholesaleEligible={wholesaleEligible}
               wholesalePricing={wholesalePricing}
             />
@@ -157,13 +165,13 @@ export default function ProductDetailView({
 
           {/* Description */}
           {product.description && (
-            <Reveal className="mt-28 sm:mt-36">
+            <Reveal className="mt-14 sm:mt-36">
               <ProductDescription description={product.description} />
             </Reveal>
           )}
 
           {/* Fragrance notes */}
-          <Reveal className="mt-24 sm:mt-32">
+          <Reveal className="mt-12 sm:mt-32">
             <FragranceNotes
               top={product.notes_top}
               middle={product.notes_middle}
@@ -173,7 +181,7 @@ export default function ProductDetailView({
 
           {/* Related */}
           {related.length > 0 && (
-            <Reveal className="mt-28 sm:mt-36">
+            <Reveal className="mt-14 sm:mt-36">
               <RelatedProducts products={related} />
             </Reveal>
           )}
@@ -190,6 +198,7 @@ export default function ProductDetailView({
         status={sel.availability.status}
         onAdd={handleAdd}
         inquiryUrl={inquiryUrl}
+        watchRef={actionRef}
       />
     </>
   );

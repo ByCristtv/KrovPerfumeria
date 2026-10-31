@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice } from "@/lib/format";
 
 const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
@@ -16,8 +15,11 @@ interface PriceTagProps {
  * the second-largest thing after the product's name, which is the hierarchy a
  * buying decision actually has.
  *
- * The number animates on change because it genuinely changes: selecting a
- * different size swaps it, and the swap needs to be noticed.
+ * It is plain text, not an animated node. It used to fade in through Framer
+ * Motion starting at `opacity: 0`, which left the price invisible on the first
+ * paint of a phone until hydration ran — the one number a shopper is looking
+ * for. Selecting another size now swaps it instantly; the selected size card
+ * already carries the "something changed" signal.
  */
 export default function PriceTag({
   price,
@@ -25,29 +27,22 @@ export default function PriceTag({
   onOffer,
 }: PriceTagProps) {
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={price}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="text-4xl tabular-nums leading-none text-krov-bone"
-          style={{ fontFamily: serif }}
-        >
-          {formatPrice(price)}
-        </motion.span>
-      </AnimatePresence>
+    <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+      <span
+        className="text-[2rem] tabular-nums leading-none text-krov-bone sm:text-4xl"
+        style={{ fontFamily: serif }}
+      >
+        {formatPrice(price)}
+      </span>
 
       {onOffer && originalPrice != null && originalPrice > price && (
-        <span className="mb-1 text-sm tabular-nums text-krov-dust line-through">
+        <span className="mb-0.5 text-sm tabular-nums text-krov-dust line-through sm:mb-1">
           {formatPrice(originalPrice)}
         </span>
       )}
 
       {onOffer && (
-        <span className="mb-1.5 bg-krov-blood px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-krov-void">
+        <span className="mb-1 bg-krov-blood px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-krov-void sm:mb-1.5">
           Oferta
         </span>
       )}

@@ -25,7 +25,7 @@ export default function InquiryButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="relative flex w-full items-center justify-center gap-2.5 bg-krov-blood px-8 py-4 text-[11px] font-medium uppercase tracking-[0.24em] text-krov-void transition-colors duration-300 hover:bg-krov-blush"
+      className="relative flex w-full items-center justify-center gap-2.5 bg-krov-blood px-3 py-3.5 text-[11px] font-medium uppercase tracking-[0.14em] text-krov-void md:px-8 md:py-4 md:tracking-[0.24em] transition-colors duration-300 hover:bg-krov-blush"
     >
       <MessageCircle size={15} aria-hidden />
       {label}
