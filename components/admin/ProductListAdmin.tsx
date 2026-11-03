@@ -4,7 +4,10 @@ import { useState } from "react";
 import Image from "next/image";
 import Swal from "sweetalert2";
 import { supabase } from "@/lib/supabase/client";
-import { setSupplierAvailabilityAction } from "@/app/admin/products/actions";
+import {
+  setProductTrendingAction,
+  setSupplierAvailabilityAction,
+} from "@/app/admin/products/actions";
 import { resolveAvailability, type AvailabilityStatus } from "@/lib/stock";
 import type { AdminVariantRow } from "@/types/product";
 
@@ -252,6 +255,68 @@ function SupplierCell({
   );
 }
 
+/**
+ * The "Tendencia" cell: a checkbox on the PRODUCT (`products.is_trending`), so
+ * every size row of one product shows the same state. Saves on click.
+ */
+function TrendingCell({
+  row,
+  onChanged,
+}: {
+  row: AdminVariantRow;
+  onChanged?: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  if (row.is_trending === undefined) {
+    return (
+      <span
+        className="text-krov-ash"
+        title="No se pudo leer la tendencia (¿falta aplicar la migración 20261103000100?)."
+      >
+        —
+      </span>
+    );
+  }
+
+  const change = async (value: boolean) => {
+    setPending(true);
+    try {
+      const result = await setProductTrendingAction(row.product_id, value);
+      if (!result.ok) {
+        void Swal.fire({
+          icon: "error",
+          title: "No se pudo actualizar",
+          text: result.message,
+          confirmButtonColor: "#ff4d74",
+        });
+        return;
+      }
+      onChanged?.();
+    } catch {
+      void Swal.fire({
+        icon: "error",
+        title: "No se pudo actualizar",
+        text: "Error de conexión. Intenta de nuevo.",
+        confirmButtonColor: "#ff4d74",
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <input
+      type="checkbox"
+      checked={row.is_trending}
+      disabled={pending}
+      onChange={(e) => change(e.target.checked)}
+      aria-label={`Marcar ${row.name} como tendencia`}
+      className="h-4 w-4 cursor-pointer accent-krov-blood disabled:cursor-not-allowed disabled:opacity-50"
+    />
+  );
+}
+
 interface ProductListAdminProps {
   /** One page of variants, fetched + paginated server-side. */
   rows: AdminVariantRow[];
@@ -325,7 +390,7 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Tamaño</th>
             <th className="px-4 py-3">Precio</th>
-            <th className="px-4 py-3">Mayorista</th>
+            <th className="px-4 py-3">Tendencia</th>
             <th className="px-4 py-3">Stock propio</th>
             <th className="px-4 py-3">Proveedor</th>
             <th className="px-4 py-3">Estado</th>
@@ -375,20 +440,7 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {v.wholesale_price != null ? (
-                    <div className="flex flex-col">
-                      <span className="text-krov-rose font-semibold">
-                        {currency.format(v.wholesale_price)}
-                      </span>
-                      {v.min_wholesale_quantity != null && (
-                        <span className="text-xs text-krov-ash">
-                          mín. {v.min_wholesale_quantity}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-krov-ash">—</span>
-                  )}
+                  <TrendingCell row={v} onChanged={onChanged} />
                 </td>
                 <td className="px-4 py-3">
                   <span

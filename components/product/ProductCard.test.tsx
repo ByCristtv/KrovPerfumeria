@@ -74,7 +74,7 @@ const ADD = /Agregar Lion al carrito/;
 const WHATSAPP = "Consultar disponibilidad de Lion por WhatsApp";
 const PICK_DECANT = "Elegir un decant de Lion";
 
-const INVENTORY_BADGES = /^(Últimas unidades|Por encargo|Solo en decants|Agotado)$/;
+const INVENTORY_BADGES = /^(Últimas unidades|Encargar|Solo en decants|Agotado)$/;
 const inventoryBadges = () => screen.queryAllByText(INVENTORY_BADGES);
 
 /** The overlay holding the two badge corners (availability left, discount right). */
@@ -195,7 +195,7 @@ describe("POR ENCARGO: no own stock, the supplier can provide the bottle", () =>
   it("shows the single badge and states it in the presentation line", () => {
     render(<ProductCard product={madeToOrder()} />);
 
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Por encargo"]);
+    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Encargar"]);
     expect(screen.getByText("Botella · 100 ml · Por encargo")).toBeInTheDocument();
     expect(screen.queryByText("También disponible en decants")).not.toBeInTheDocument();
   });
@@ -247,7 +247,7 @@ describe("POR ENCARGO: no own stock, the supplier can provide the bottle", () =>
     render(<ProductCard product={madeToOrder(DECANTS, 50)} />);
 
     // POR ENCARGO takes precedence over SOLO EN DECANTS...
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Por encargo"]);
+    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Encargar"]);
     expect(screen.queryByText("Solo en decants")).not.toBeInTheDocument();
     // ...the bottle stays the presentation...
     expect(screen.getByText("Botella · 100 ml · Por encargo")).toBeInTheDocument();
@@ -333,7 +333,7 @@ describe("SOLO EN DECANTS: no bottle by any route, decants in stock", () => {
 
   it("is chosen only when the SUPPLIER cannot provide the bottle (precedence)", () => {
     render(<ProductCard product={decantsOnly(DECANTS, 50, { supplier_available: true })} />);
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Por encargo"]);
+    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Encargar"]);
   });
 
   it("a product sold only as decants reads the same way", () => {
@@ -420,9 +420,9 @@ describe("discounts: top-right, real, and about the variant on show", () => {
       <ProductCard product={card([onOffer({ stock: 0, supplier_available: true })])} />
     );
 
-    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Por encargo"]);
+    expect(inventoryBadges().map((n) => n.textContent)).toEqual(["Encargar"]);
     const discount = screen.getByText("-17%").parentElement!;
-    const availability = screen.getByText("Por encargo", { selector: "span" });
+    const availability = screen.getByText("Encargar", { selector: "span" });
     expect(discount).not.toContainElement(availability);
     expect(availability.parentElement).toBe(discount.parentElement); // one row: left | right
     expect(discount.className).toContain("ml-auto"); // pinned right even with no left badge

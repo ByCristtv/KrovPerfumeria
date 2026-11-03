@@ -86,7 +86,7 @@ const BADGE_TONE: Record<BadgeTone, string> = {
 
 // No `available` / `low_stock` entry: a bottle KROV holds carries no badge.
 const STATUS_BADGE: Partial<Record<CardStatus, { label: string; tone: BadgeTone }>> = {
-  made_to_order: { label: "Por encargo", tone: "quiet" },
+  made_to_order: { label: "Encargar", tone: "quiet" },
   decants_only: { label: "Solo en decants", tone: "quiet" },
   sold_out: { label: "Agotado", tone: "muted" },
 };

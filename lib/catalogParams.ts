@@ -31,7 +31,10 @@ const ORDER_VALUES: ProductOrderBy[] = [
 ];
 const TYPE_VALUES: ProductTypes[] = ["full_size", "decant", "set"];
 
-export const DEFAULT_ORDER: ProductOrderBy = "price_asc";
+/**
+ * No explicit sort = default catalog order (trending first, then price asc).
+ * An explicit `sort=price_asc` stays a pure price ordering.
+ */
 
 function first(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
@@ -52,7 +55,7 @@ export function parseCatalogFilters(params: RawSearchParams): ProductFilters {
     productType: TYPE_VALUES.includes(typeRaw) ? typeRaw : undefined,
     onOffer: offerRaw === "1" ? true : undefined,
     wholesaleOnly: wholesaleRaw === "1" ? true : undefined,
-    orderBy: ORDER_VALUES.includes(sortRaw) ? sortRaw : DEFAULT_ORDER,
+    orderBy: ORDER_VALUES.includes(sortRaw) ? sortRaw : undefined,
   };
 }
 

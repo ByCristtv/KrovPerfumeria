@@ -148,11 +148,6 @@ function VariantCard({ variant, selected, status, onClick }: VariantCardProps) {
             Agotado
           </span>
         )}
-        {status === "made_to_order" && (
-          <span className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-krov-rose">
-            Por encargo
-          </span>
-        )}
       </span>
     </button>
   );

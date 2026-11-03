@@ -24,11 +24,11 @@ function setup(poolMl = 0, selectedId = "in") {
 const size = (ml: number) => screen.getByRole("button", { name: new RegExp(`^${ml} ml`) });
 
 describe("VariantSelector availability", () => {
-  it("keeps a made-to-order size selectable and tags it 'Por encargo'", () => {
+  it("keeps a made-to-order size selectable and shows only size and price", () => {
     const onSelect = setup();
 
     expect(size(50)).toBeEnabled();
-    expect(size(50)).toHaveTextContent("Por encargo");
+    expect(size(50)).not.toHaveTextContent("Por encargo");
 
     fireEvent.click(size(50));
     expect(onSelect).toHaveBeenCalledWith(madeToOrder);

@@ -42,7 +42,7 @@ describe("StickyPurchaseBar", () => {
     expect(screen.queryByText(/Por encargo/)).not.toBeInTheDocument();
   });
 
-  it("made to order: a Consultar WhatsApp link, no add button, and the state is named", () => {
+  it("made to order: a Consultar WhatsApp link, no add button, and no redundant tag", () => {
     const onAdd = setup("made_to_order", URL);
 
     expect(button("Agregar")).not.toBeInTheDocument();
@@ -52,7 +52,7 @@ describe("StickyPurchaseBar", () => {
     expect(cta).toHaveAttribute("href", URL);
     expect(cta).toHaveAttribute("target", "_blank");
     expect(cta.getAttribute("rel")).toContain("noopener");
-    expect(screen.getByText(/Por encargo/)).toBeInTheDocument();
+    expect(screen.queryByText(/Por encargo/)).not.toBeInTheDocument();
 
     fireEvent.click(cta);
     expect(onAdd).not.toHaveBeenCalled();

@@ -1,7 +1,6 @@
 import { cache } from "react";
 import { getCategoryIdBySlug } from "@/features/categories/getCategoryIdBySlug";
 import { getCatalogPage } from "@/features/products/getProducts";
-import { DEFAULT_ORDER } from "@/lib/catalogParams";
 import { LANDINGS, type LandingSlug } from "@/lib/seo/landings";
 import type { CatalogPageResult, ProductFilters } from "@/types/productFilter";
 
@@ -27,7 +26,7 @@ export const getLandingCatalog = cache(
   async (slug: LandingSlug, page: number): Promise<CatalogPageResult> => {
     const { filter } = LANDINGS[slug];
     // Same default ordering as the main catalog, so the two listings agree.
-    const filters: ProductFilters = { orderBy: DEFAULT_ORDER };
+    const filters: ProductFilters = {};
 
     if (filter.categorySlug) {
       const categoryId = await getCategoryIdBySlug(filter.categorySlug);

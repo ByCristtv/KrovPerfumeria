@@ -902,6 +902,7 @@ export type Database = {
           gender: string | null
           id: string
           is_active: boolean
+          is_trending: boolean
           name: string
           notes_base: string | null
           notes_middle: string | null
@@ -919,6 +920,7 @@ export type Database = {
           gender?: string | null
           id?: string
           is_active?: boolean
+          is_trending?: boolean
           name: string
           notes_base?: string | null
           notes_middle?: string | null
@@ -936,6 +938,7 @@ export type Database = {
           gender?: string | null
           id?: string
           is_active?: boolean
+          is_trending?: boolean
           name?: string
           notes_base?: string | null
           notes_middle?: string | null

@@ -38,6 +38,8 @@ export interface AdminVariantRow {
   supplier_available?: boolean;
   /** When an admin last inspected the supplier catalog; null = never. */
   supplier_checked_at?: string | null;
+  /** Product-level trending flag; `undefined` = not loaded (migration pending). */
+  is_trending?: boolean;
   name: string;
   description: string | null;
   brand: string;

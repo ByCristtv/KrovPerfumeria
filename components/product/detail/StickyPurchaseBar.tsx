@@ -126,7 +126,6 @@ export default function StickyPurchaseBar({
             {formatPrice(price)}{" "}
             <span className="text-[10px] text-krov-dust">
               · {variantLabel}
-              {status === "made_to_order" && " · Por encargo"}
             </span>
           </p>
         </div>

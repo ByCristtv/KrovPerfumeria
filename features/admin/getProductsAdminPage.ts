@@ -76,6 +76,29 @@ async function fetchSupplierState(
 }
 
 /**
+ * `products.is_trending` for the products on this page. Narrow read for the same
+ * reason as the supplier state; `null` on failure (e.g. migration pending), so
+ * the table shows a dash instead of failing.
+ */
+async function fetchTrendingState(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  productIds: string[]
+): Promise<Map<string, boolean> | null> {
+  if (productIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, is_trending")
+    .in("id", productIds);
+
+  if (error) {
+    console.error("getProductsAdminPage trending state failed:", error.message);
+    return null;
+  }
+  return new Map((data ?? []).map((p) => [p.id, p.is_trending === true]));
+}
+
+/**
  * Fetch one page of product variants for the admin table.
  *
  * Runs on the SERVER with the request-bound Supabase client, so the
@@ -125,6 +148,10 @@ export async function getProductsAdminPage(
     raw.map((v) => v.variant_id)
   );
 
+  const trending = await fetchTrendingState(supabase, [
+    ...new Set(raw.map((v) => v.product_id)),
+  ]);
+
   const rows: AdminVariantRow[] = raw.map((v) => ({
     variant_id: v.variant_id,
     product_id: v.product_id,
@@ -142,6 +169,7 @@ export async function getProductsAdminPage(
     // sold out / never verified" apart from "could not be loaded".
     supplier_available: supplier?.get(v.variant_id)?.supplier_available,
     supplier_checked_at: supplier?.get(v.variant_id)?.supplier_checked_at,
+    is_trending: trending?.get(v.product_id),
     name: v.name ?? "Sin nombre",
     description: v.description ?? null,
     brand: v.brand ?? "Sin marca",

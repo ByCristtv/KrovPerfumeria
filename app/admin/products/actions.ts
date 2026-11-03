@@ -105,6 +105,69 @@ export async function setSupplierAvailabilityAction(
   };
 }
 
+/**
+ * Mark / unmark a PRODUCT as trending (`products.is_trending`): trending
+ * products lead the default catalog order. Writes that one column only.
+ * Same layering as the supplier action: role re-check here, RLS underneath.
+ */
+export async function setProductTrendingAction(
+  productId: string,
+  trending: boolean
+): Promise<ActionResult<{ product_id: string; is_trending: boolean }>> {
+  if (typeof productId !== "string" || !isUuid(productId)) {
+    return { ok: false, message: "Producto inválido." };
+  }
+  if (typeof trending !== "boolean") {
+    return { ok: false, message: "Valor de tendencia inválido." };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, message: "Tu sesión expiró. Vuelve a iniciar sesión." };
+  }
+
+  const { data: caller } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (caller?.role !== "admin") {
+    return { ok: false, message: "No tienes permiso para realizar esta acción." };
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .update({ is_trending: trending })
+    .eq("id", productId)
+    .select("id, is_trending")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[admin/products/actions] trending update error", error);
+    return { ok: false, message: "No se pudo actualizar la tendencia." };
+  }
+  if (!data) {
+    return {
+      ok: false,
+      message: "No se encontró el producto, o no tienes permiso para modificarlo.",
+    };
+  }
+
+  revalidatePath("/admin/products");
+  revalidatePath("/products");
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    message: trending ? "Marcado como tendencia." : "Quitado de tendencias.",
+    data: { product_id: data.id, is_trending: data.is_trending === true },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────

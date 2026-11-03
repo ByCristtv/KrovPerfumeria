@@ -97,7 +97,7 @@ describe("ProductListAdmin", () => {
         "Tipo",
         "Tamaño",
         "Precio",
-        "Mayorista",
+        "Tendencia",
         "Stock propio",
         "Proveedor",
         "Estado",
@@ -277,7 +277,7 @@ describe("ProductListAdmin", () => {
           />
         );
 
-        // Scoped to the Proveedor cell: "Mayorista" also renders a dash.
+        // Scoped to the Proveedor cell: "Tendencia" may also render a dash.
         const cell = within(onlyRow()).getAllByRole("cell")[headers().indexOf("Proveedor")];
         expect(cell).toHaveTextContent(/^—$/);
         expect(within(cell).queryByRole("button")).not.toBeInTheDocument();

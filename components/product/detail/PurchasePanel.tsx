@@ -177,10 +177,7 @@ export default function PurchasePanel({
             <MadeToOrderNotice />
             {inquiryUrl && (
               <>
-                <InquiryButton href={inquiryUrl} />
-                <p className="text-center text-[11px] text-krov-dust">
-                  Se abrirá WhatsApp con el mensaje listo para que lo envíes.
-                </p>
+                <InquiryButton href={inquiryUrl} />             
               </>
             )}
           </div>
@@ -216,7 +213,7 @@ function MadeToOrderNotice() {
   return (
     <div className="border border-krov-smoke bg-krov-coal px-3.5 py-3 md:px-4 md:py-3.5">
       <p className="text-[10px] uppercase tracking-[0.24em] text-krov-rose">
-        Por encargo
+        Entrega
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-krov-ash md:mt-2 md:text-[13px]">
         Tiempo estimado de entrega: 1 a 3 dias

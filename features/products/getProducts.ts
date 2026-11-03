@@ -216,7 +216,7 @@ function applyFilters(
   return next;
 }
 
-/** Apply ordering. Falls back to newest-first when unspecified. */
+/** Apply ordering. Unspecified = trending first, then price ascending. */
 function applyOrder(query: CatalogQuery, orderBy: ProductFilters["orderBy"]): CatalogQuery {
   switch (orderBy) {
     case "price_asc":
@@ -229,7 +229,9 @@ function applyOrder(query: CatalogQuery, orderBy: ProductFilters["orderBy"]): Ca
     case "name_desc":
       return query.order("name", { ascending: false });
     default:
-      return query.order("created_at", { ascending: false });
+      return query
+        .order("is_trending", { ascending: false })
+        .order("featured_variant(price)", { ascending: true });
   }
 }
 
