@@ -84,7 +84,11 @@ function FragranceCard({
           src={src}
           alt=""
           fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          // A column of the grid inside the profile's `max-w-4xl`, less `p-6`.
+          sizes="(max-width: 639px) 32vw, (max-width: 1023px) 24vw, 145px"
+          // Never spend a transformation on the placeholder, which also keeps it
+          // working when the failure that led here was the optimizer's.
+          unoptimized={src === PLACEHOLDER}
           onLoad={() => setLoaded(true)}
           onError={() => {
             setFailed(true);

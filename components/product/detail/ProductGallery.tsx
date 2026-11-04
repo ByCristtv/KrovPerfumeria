@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
+import ProductImage, { PLACEHOLDER_IMAGE } from "@/components/product/ProductImage";
 
 export interface GalleryImage {
   url: string;
@@ -14,7 +14,16 @@ interface ProductGalleryProps {
   productName: string;
 }
 
-const PLACEHOLDER = "/placeholder.png";
+/**
+ * The plate, padding included. Phones: its height caps at 16.25rem and the
+ * photograph is height-bound. From `md`: half the page column, which stops
+ * growing at 576px in `max-w-7xl`. The hover zoom draws from the headroom the
+ * padding leaves, so the image stays sharp at 1.6x on a 2x desktop.
+ */
+const MAIN_IMAGE_SIZES = "(max-width: 767px) 260px, (max-width: 1279px) 45vw, 576px";
+
+/** The 48px / 80px thumbnail boxes less their `p-2`: the width actually drawn. */
+const THUMB_SIZES = "(max-width: 767px) 32px, 64px";
 
 /**
  * Parent-product gallery: a main image plus a thumbnail strip, switched on
@@ -30,7 +39,7 @@ const PLACEHOLDER = "/placeholder.png";
  *
  * The main image is deliberately NOT wrapped in any entrance animation. It
  * previously lived inside two nested Framer Motion nodes that started at
- * `opacity: 0`, so even though `next/image priority` preloaded the bytes early,
+ * `opacity: 0`, so even though `next/image preload` fetched the bytes early,
  * the pixels stayed invisible until React hydrated and ran the animation — on a
  * slow phone that is exactly the "hero loads noticeably after the rest of the
  * page" symptom. Now the server-rendered, prioritized image is visible on first
@@ -44,7 +53,7 @@ export default function ProductGallery({
     const sorted = [...images].sort((a, b) => a.position - b.position);
     return sorted.length > 0
       ? sorted
-      : [{ url: PLACEHOLDER, position: 0, alt_text: productName }];
+      : [{ url: PLACEHOLDER_IMAGE, position: 0, alt_text: productName }];
   }, [images, productName]);
 
   const [activeIdx, setActiveIdx] = useState(0);
@@ -83,13 +92,13 @@ export default function ProductGallery({
           onMouseLeave={() => setZoom((z) => ({ ...z, on: false }))}
           className="group relative h-[clamp(13rem,31svh,16.25rem)] overflow-hidden bg-gradient-to-b from-krov-linen via-krov-linen to-krov-linen-deep md:aspect-square md:h-auto"
         >
-          <Image
+          <ProductImage
             key={active.url}
             src={active.url}
             alt={active.alt_text || productName}
             fill
-            sizes="(max-width: 768px) 80vw, 50vw"
-            priority
+            sizes={MAIN_IMAGE_SIZES}
+            preload
             className="object-contain p-4 transition-transform duration-500 ease-out md:p-10"
             style={{
               transform: zoom.on ? "scale(1.6)" : "scale(1)",
@@ -127,11 +136,11 @@ export default function ProductGallery({
                     : "border-transparent opacity-60 hover:opacity-100"
                 }`}
               >
-                <Image
+                <ProductImage
                   src={img.url}
                   alt={img.alt_text || `${productName} ${i + 1}`}
                   fill
-                  sizes="80px"
+                  sizes={THUMB_SIZES}
                   className="object-contain p-2"
                 />
               </button>

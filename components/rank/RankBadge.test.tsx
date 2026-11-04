@@ -4,7 +4,7 @@ import RankBadge from "./RankBadge";
 import { RANK_THRESHOLDS, getRankIconUrl, getRankLevel } from "@/lib/rank";
 
 describe("rank icon config", () => {
-  it("maps every tier to its badge in the rank-icons bucket", () => {
+  it("maps every tier to its badge file", () => {
     expect(RANK_THRESHOLDS.map((t) => [t.rank, t.icon])).toEqual([
       ["Aficionado", "Aficionado.avif"],
       ["Coleccionista", "Coleccionista.avif"],
@@ -14,10 +14,8 @@ describe("rank icon config", () => {
     ]);
   });
 
-  it("builds the public storage URL from NEXT_PUBLIC_SUPABASE_URL", () => {
-    expect(getRankIconUrl("Maestro")).toBe(
-      "https://test.supabase.co/storage/v1/object/public/rank-icons/icons/Krov.avif"
-    );
+  it("serves the badge from public/ranks, whichever project the app points at", () => {
+    expect(getRankIconUrl("Maestro")).toBe("/ranks/Krov.avif");
   });
 
   it("numbers the ladder from 1", () => {

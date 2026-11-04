@@ -105,7 +105,7 @@ export default function Hero({ offers = [] }: { offers?: FeaturedOffer[] }) {
               src={img}
               alt=""
               fill
-              priority={index === 0}
+              preload={index === 0}
               aria-hidden
               sizes="100vw"
               className={`absolute inset-0 object-cover transition-[opacity,transform] duration-[4000ms] ease-out ${

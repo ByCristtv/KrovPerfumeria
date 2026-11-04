@@ -683,14 +683,50 @@ describe("rendering cost (mobile catalog)", () => {
     expect(container.innerHTML).not.toContain("transition-all");
   });
 
-  it("asks for the width the photograph is drawn at, not the whole column", () => {
-    const { container } = render(<ProductCard product={card([bottle()])} />);
-    const sizes = container.querySelector("img")!.getAttribute("sizes")!;
+  const PHOTO = { product_images: [{ url: "/photo.webp", position: 0 }] };
 
-    // Two columns on a phone: (50vw column) - (56px of plate padding) - gutters.
-    expect(sizes).toContain("(max-width: 639px) calc(50vw - 84px)");
+  it("asks for the width the photograph is drawn at, not the whole column", () => {
+    const { container } = render(<ProductCard product={card([bottle()], PHOTO)} />);
+    const img = container.querySelector("img")!;
+    const sizes = img.getAttribute("sizes")!;
+
+    // Two columns on a phone: 30vw is 117px of a 390px screen, the 111px the
+    // photograph is drawn at once the gutters and plate padding are gone.
+    expect(sizes).toContain("(max-width: 479px) 30vw");
     // The widest case is a fixed pixel size, so a big monitor does not ask for 25vw of 2560.
     expect(sizes.endsWith("230px")).toBe(true);
+  });
+
+  it("keeps the srcset pruned: no calc() and no widths below the smallest slot", () => {
+    const { container } = render(<ProductCard product={card([bottle()], PHOTO)} />);
+    const img = container.querySelector("img")!;
+
+    // next/image cannot read `calc(50vw - 84px)` and would list every width.
+    expect(img.getAttribute("sizes")).not.toContain("calc(");
+    expect(img.getAttribute("srcset")).not.toMatch(/\b(64|96)w\b/);
+  });
+
+  it("sends the placeholder itself straight to the file, not through the optimizer", () => {
+    const { container } = render(<ProductCard product={card([bottle()])} />);
+    const img = container.querySelector("img")!;
+
+    expect(new URL(img.src).pathname).toBe("/placeholder.png");
+    expect(img.hasAttribute("srcset")).toBe(false);
+  });
+
+  it("swaps a failed photograph for the raw placeholder, once", () => {
+    const { container } = render(<ProductCard product={card([bottle()], PHOTO)} />);
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toContain("/_next/image");
+
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toBe("/placeholder.png");
+    expect(img.hasAttribute("srcset")).toBe(false);
+
+    // The placeholder failing too must not start a loop.
+    const setSrc = vi.spyOn(img, "src", "set");
+    fireEvent.error(img);
+    expect(setSrc).not.toHaveBeenCalled();
   });
 
   it("hides the corner control until hover ONLY where hover exists", () => {

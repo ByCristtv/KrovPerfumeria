@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { Minus, Plus, X } from "lucide-react";
+import ProductImage from "@/components/product/ProductImage";
 import { CartLineItem } from "@/types/product";
 import type { LinePricing } from "@/lib/pricing/wholesale";
 
@@ -67,11 +67,12 @@ export default function CartItem({
         <article className="border-b border-krov-smoke py-5">
             <div className="flex gap-4 sm:gap-6">
                 <div className="relative h-24 w-20 shrink-0 overflow-hidden bg-gradient-to-b from-krov-linen to-krov-linen-deep sm:h-28 sm:w-24">
-                    <Image
+                    <ProductImage
                         src={image_url}
                         alt={product_name}
                         fill
-                        sizes="96px"
+                        // The w-20 / sm:w-24 box less its p-2.
+                        sizes="(max-width: 639px) 64px, 80px"
                         className="object-contain p-2"
                     />
                 </div>

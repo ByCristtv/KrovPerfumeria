@@ -13,7 +13,6 @@ type ImagePlaceholderProps = {
   /** Hide the numbered badge (e.g. on the closing success visual). */
   showBadge?: boolean;
   label?: string;
-  priority?: boolean;
 };
 
 /**
@@ -38,7 +37,6 @@ export default function ImagePlaceholder({
   number,
   showBadge = true,
   label = "Ilustración / Captura de pantalla",
-  priority = false,
 }: ImagePlaceholderProps) {
   return (
     <div className="group/img hover-lift relative w-full">
@@ -57,7 +55,6 @@ export default function ImagePlaceholder({
             src={src}
             alt={alt}
             fill
-            priority={priority}
             sizes="(max-width: 1024px) 100vw, 50vw"
             className="object-cover transition-transform duration-700 group-hover/img:scale-[1.04]"
           />

@@ -23,7 +23,7 @@ export type UserRank =
 export interface RankDefinition {
   rank: UserRank;
   minXP: number;
-  /** Badge file inside {@link RANK_ICON_BUCKET}/{@link RANK_ICON_FOLDER}. */
+  /** Badge file inside {@link RANK_ICON_PATH}. */
   icon: string;
 }
 
@@ -48,24 +48,16 @@ export const RANK_THRESHOLDS: readonly RankDefinition[] = [
   { rank: "Maestro", minXP: 18_000, icon: "Krov.avif" },
 ] as const;
 
-/** Public Supabase Storage bucket + folder holding the rank badges. */
-export const RANK_ICON_BUCKET = "rank-icons";
-export const RANK_ICON_FOLDER = "icons";
+/** Folder under `public/` holding the rank badges, 192px for a 96px maximum box. */
+export const RANK_ICON_PATH = "/ranks";
 
 /**
- * Public URL of a rank's badge:
- * `<SUPABASE_URL>/storage/v1/object/public/rank-icons/icons/<file>`.
- *
- * Built from `NEXT_PUBLIC_SUPABASE_URL` (inlined at build time, so it works in
- * client components too) and therefore follows whichever project the app is
- * pointed at — the bucket must exist there. Returns null when the env var is
- * missing, and the badge falls back to a monogram.
+ * Site path of a rank's badge. Returns null for an unknown rank, and the badge
+ * falls back to a monogram.
  */
 export function getRankIconUrl(rank: UserRank): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
   const tier = RANK_THRESHOLDS.find((t) => t.rank === rank);
-  if (!base || !tier) return null;
-  return `${base}/storage/v1/object/public/${RANK_ICON_BUCKET}/${RANK_ICON_FOLDER}/${tier.icon}`;
+  return tier ? `${RANK_ICON_PATH}/${tier.icon}` : null;
 }
 
 /** 1-based position of a rank on the ladder (Aficionado 1 … Maestro 5). */

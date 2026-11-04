@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import ProductImage from "@/components/product/ProductImage";
 import Link from "next/link";
 import {
   useCallback,
@@ -252,12 +252,14 @@ export default function OffersCarousel({ offers }: { offers: FeaturedOffer[] }) 
                 className="relative block aspect-4/5 w-full overflow-hidden rounded-xl bg-linear-to-b from-krov-linen to-krov-linen-deep"
               >
                 {showImage && (
-                  <Image
+                  <ProductImage
                     src={offer.imageUrl}
                     alt={offer.imageAlt}
                     fill
                     loading={i === 0 ? "eager" : "lazy"}
-                    sizes="(max-width: 640px) 42vw, (max-width: 1024px) 38vw, 16rem"
+                    // The plate's share of the card, less the card's and the
+                    // plate's padding. Below `lg` the card caps at `max-w-xl`.
+                    sizes="(max-width: 639px) 27vw, (max-width: 1279px) 152px, 183px"
                     className="object-contain p-4 sm:p-6"
                   />
                 )}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
+import ProductImage from "@/components/product/ProductImage";
 import { useAddToCart } from "@/hooks/useCart";
 import type { ProductCardData, ProductTypes } from "@/types/product";
 import { resolveCardState, type CardState, type CardStatus } from "@/lib/catalog/cardState";
@@ -23,12 +24,17 @@ const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
  * Using the full column made a 3x phone fetch and decode a 640px image for a
  * ~110px slot: ~3x the bytes and bitmap memory, times every card on the page.
  * Keep in sync with ProductGrid's columns and the plate padding below.
+ *
+ * Plain `vw`, no `calc()`: next/image only prunes its srcset when a `vw` follows
+ * whitespace, so `calc(50vw - 84px)` got every configured width on every card.
+ * Each value is the top of its range rounded to a percentage (the exact widths
+ * are 50vw - 84px, 50vw - 100px, 33.4vw - 93px and 25vw - 90px).
  */
 const IMAGE_SIZES = [
-  "(max-width: 639px) calc(50vw - 84px)",
-  "(max-width: 767px) calc(50vw - 100px)",
-  "(max-width: 1023px) calc(33.4vw - 93px)",
-  "(max-width: 1279px) calc(25vw - 90px)",
+  "(max-width: 479px) 30vw",
+  "(max-width: 767px) 37vw",
+  "(max-width: 1023px) 24vw",
+  "(max-width: 1279px) 18vw",
   "230px",
 ].join(", ");
 
@@ -229,7 +235,7 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
               when the browser has decoded it (`decoding="async"`, lazy below
               the fold). That was one `useState`, one re-render and one infinite
               `animate-pulse` per card, ~20 of them while a page loaded. */}
-          <Image
+          <ProductImage
             src={imageUrl}
             alt={product.name}
             fill

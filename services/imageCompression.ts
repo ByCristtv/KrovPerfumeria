@@ -22,7 +22,8 @@ export interface CompressImageOptions {
   maxDimension?: number;
   /** Lossy encoder quality, 0–1. Default 0.82 (visually excellent, small). */
   quality?: number;
-  /** Output MIME type. Default "image/webp" — great compression + alpha. */
+  /** Preferred output MIME type. Default "image/webp" — great compression +
+   *  alpha. The file returned always says what was actually encoded. */
   mimeType?: "image/webp" | "image/jpeg";
 }
 
@@ -32,10 +33,17 @@ const DEFAULTS: Required<CompressImageOptions> = {
   mimeType: "image/webp",
 };
 
-/** Extensions we swap the filename to, keyed by output MIME. */
+/**
+ * Extensions we swap the filename to, keyed by the format actually encoded.
+ * PNG is what a browser's canvas emits for a type it cannot encode, and what we
+ * keep when an image has transparency and WebP is unavailable.
+ */
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
   "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/avif": "avif",
+  "image/gif": "gif",
 };
 
 /**
@@ -83,21 +91,22 @@ export async function compressImage(
     if (!ctx) {
       throw new Error("No pudimos optimizar la imagen (canvas no disponible).");
     }
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bitmap, 0, 0, width, height);
 
-    const blob = await canvasToBlob(canvas, opts.mimeType, opts.quality);
-    if (!blob) {
+    const blob = await encodeCanvas(canvas, ctx, opts);
+    if (!blob || !EXTENSION_BY_MIME[blob.type]) {
       throw new Error("No pudimos optimizar la imagen. Intenta con otro archivo.");
     }
 
     // Guard against pathological cases (tiny already-optimized images can grow
     // when re-encoded) — keep whichever is smaller.
     if (blob.size >= file.size) {
-      return file;
+      return labelByContent(file);
     }
 
-    return new File([blob], renameForMime(file.name, opts.mimeType), {
-      type: opts.mimeType,
+    return new File([blob], renameForMime(file.name, blob.type), {
+      type: blob.type,
       lastModified: file.lastModified,
     });
   } finally {
@@ -123,6 +132,67 @@ function fitWithin(
     width: Math.round(width * scale),
     height: Math.round(height * scale),
   };
+}
+
+/**
+ * Encode in the requested format, trusting only what the browser reports back.
+ * `toBlob` silently returns a PNG for a type it cannot encode, which is what
+ * Safari does for WebP. The fallback is JPEG, except that JPEG has no alpha and
+ * would turn a transparent background black, so those images stay PNG.
+ */
+async function encodeCanvas(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  opts: Required<CompressImageOptions>
+): Promise<Blob | null> {
+  const preferred = await canvasToBlob(canvas, opts.mimeType, opts.quality);
+  if (preferred?.type === opts.mimeType) return preferred;
+
+  if (!hasTransparency(ctx, canvas.width, canvas.height)) {
+    const jpeg = await canvasToBlob(canvas, "image/jpeg", opts.quality);
+    if (jpeg?.type === "image/jpeg") return jpeg;
+  }
+  return preferred;
+}
+
+function hasTransparency(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): boolean {
+  const { data } = ctx.getImageData(0, 0, width, height);
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
+
+/**
+ * A kept original is uploaded as it came, but a browser derives `File.type` from
+ * the extension alone, so a PNG renamed to .webp would claim to be WebP. Read
+ * the signature, and correct the label only when it is known and disagrees.
+ */
+async function labelByContent(file: File): Promise<File> {
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const actual = sniffImageType(header);
+  if (!actual || actual === file.type) return file;
+
+  return new File([file], renameForMime(file.name, actual), {
+    type: actual,
+    lastModified: file.lastModified,
+  });
+}
+
+function sniffImageType(bytes: Uint8Array): string | null {
+  const ascii = (start: number, end: number) =>
+    String.fromCharCode(...bytes.subarray(start, end));
+
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes[0] === 0x89 && ascii(1, 4) === "PNG") return "image/png";
+  if (ascii(0, 3) === "GIF") return "image/gif";
+  if (ascii(4, 8) === "ftyp" && ascii(8, 11) === "avi") return "image/avif";
+  return null;
 }
 
 /** Promise wrapper around the callback-based canvas.toBlob. */

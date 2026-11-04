@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import ProductImage from "@/components/product/ProductImage";
 import { formatPrice } from "@/lib/format";
 import type { ProductCardData } from "@/types/product";
 
@@ -8,6 +8,14 @@ const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
 interface RelatedProductsProps {
   products: ProductCardData[];
 }
+
+/**
+ * The width drawn: a column of the grid below, inside the product page's gutters,
+ * less the plate's `p-6`. Plain `vw` so next/image can prune the srcset (see
+ * ProductCard). Keep in sync with the grid and the plate padding.
+ */
+const IMAGE_SIZES =
+  "(max-width: 639px) 31vw, (max-width: 1023px) 42vw, (max-width: 1279px) 19vw, 235px";
 
 /**
  * Built to match the catalogue card exactly — same linen plate, same red edge
@@ -55,11 +63,11 @@ function RelatedCard({ product }: { product: ProductCardData }) {
   return (
     <Link href={`/products/${product.slug}`} className="group block">
       <div className="relative aspect-4/5 overflow-hidden bg-gradient-to-b from-krov-linen to-krov-linen-deep">
-        <Image
+        <ProductImage
           src={img}
           alt={product.name}
           fill
-          sizes="(max-width: 640px) 50vw, 25vw"
+          sizes={IMAGE_SIZES}
           className="object-contain p-6 transition-transform duration-700 ease-out group-hover:scale-[1.05]"
           loading="lazy"
         />

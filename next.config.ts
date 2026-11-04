@@ -23,6 +23,15 @@ const nextConfig: NextConfig = {
     "https://pavement-exuberant-harness.ngrok-free.dev",
   ],
   images: {
+    // 31 days. The effective lifetime is max(this, the upstream max-age), so it
+    // covers the older Supabase objects (max-age=3600) that the previous 4-hour
+    // default re-transformed, and billed, on the first request after each expiry.
+    // Nothing invalidates it: replace a file by giving it a new URL.
+    minimumCacheTTL: 2678400,
+    // Every width here is one more transformation per image, so only widths a
+    // real layout resolves to are listed. See the `sizes` on each image surface.
+    imageSizes: [64, 96, 128, 256, 384],
+    deviceSizes: [640, 828, 1080, 1200, 1920],
     remotePatterns: [
       {
         protocol: 'https',

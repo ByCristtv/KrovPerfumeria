@@ -55,7 +55,9 @@ interface KrovLogoProps {
   tone?: Tone;
   /** Rendered width in px. Height follows the asset's own aspect ratio. */
   width: number;
-  priority?: boolean;
+  /** Load immediately, for a logo above the fold. It is never the LCP element,
+   *  so it does not get a preload that would compete with the one that is. */
+  eager?: boolean;
   className?: string;
 }
 
@@ -63,7 +65,7 @@ export default function KrovLogo({
   variant = "wordmark",
   tone = "light",
   width,
-  priority = false,
+  eager = false,
   className = "",
 }: KrovLogoProps) {
   const asset = ASSETS[variant];
@@ -78,7 +80,7 @@ export default function KrovLogo({
       alt="KROV Perfumería"
       width={width}
       height={Math.round((width * asset.h) / asset.w)}
-      priority={priority}
+      loading={eager ? "eager" : "lazy"}
       // `h-auto` keeps the aspect ratio locked even if a parent constrains the
       // width — the mark must never be stretched on either axis.
       className={`h-auto w-auto max-w-full ${className}`}

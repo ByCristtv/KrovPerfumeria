@@ -56,7 +56,8 @@ function VariantThumbnail({ url, name }: { url: string | null; name: string }) {
         src={url}
         alt=""
         fill
-        sizes={`${THUMB_WIDTH}px`}
+        // The box less its 4px of `p-1` on each side.
+        sizes={`${THUMB_WIDTH - 8}px`}
         className="object-contain p-1"
       />
     </div>

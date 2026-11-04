@@ -19,7 +19,9 @@ export async function uploadProductImage(file: File): Promise<string> {
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(filePath, optimized);
+    // The UUID makes every key unique and this never upserts, so the object
+    // cannot change under its URL. Same value as the avatar route.
+    .upload(filePath, optimized, { cacheControl: "31536000" });
 
   if (uploadError) {
     throw new Error(`Image upload failed: ${uploadError.message}`);

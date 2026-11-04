@@ -29,12 +29,11 @@ interface RankBadgeProps {
 }
 
 /**
- * A rank's official badge, served from Supabase Storage (`rank-icons/icons`).
+ * A rank's official badge, served from `public/ranks`.
  *
  * The URL and the file per tier live in lib/rank.ts — nothing here knows a
- * rank name. If the image cannot be built (no env) or fails to load (bucket
- * missing on the project the app points at), it degrades to a monogram in the
- * same box rather than a broken-image glyph.
+ * rank name. If the image cannot be built or fails to load, it degrades to a
+ * monogram in the same box rather than a broken-image glyph.
  */
 export default function RankBadge({
   rank,

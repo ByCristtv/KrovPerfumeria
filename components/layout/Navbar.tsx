@@ -128,7 +128,7 @@ export default function Navbar() {
                 <KrovLogo
                   tone="light"
                   width={scrolled ? 118 : 132}
-                  priority
+                  eager
                   className="transition-[width] duration-500"
                 />
               </Link>
