@@ -172,14 +172,7 @@ export default function Hero({ offers = [] }: { offers?: FeaturedOffer[] }) {
         <div className={hasOffers ? "max-w-2xl lg:col-start-1 lg:row-start-1 lg:self-end" : "max-w-2xl"}>
           {/* The etymology, stated once, quietly. This is the only place the
               Cyrillic appears — it rewards attention instead of demanding it. */}
-          <motion.p
-            variants={fadeUp}
-            className="flex items-center gap-3 text-[10px] uppercase tracking-[0.42em] text-krov-rose"
-          >
-            <span className="h-px w-8 bg-krov-blood" aria-hidden />
-            кровь · Perfumería
-          </motion.p>
-
+        
           <motion.h1
             variants={fadeUp}
             className={`text-[2.75rem] leading-[0.95] text-krov-bone sm:text-6xl ${
@@ -187,9 +180,9 @@ export default function Hero({ offers = [] }: { offers?: FeaturedOffer[] }) {
             }`}
             style={{ fontFamily: serif }}
           >
-            Tu perfume
+            Perfume?
             <br />
-            <span className="italic text-krov-blush">a un click</span>
+            <span className="italic text-krov-blush">en KROV</span>
           </motion.h1>
 
           <motion.p
@@ -198,7 +191,7 @@ export default function Hero({ offers = [] }: { offers?: FeaturedOffer[] }) {
               hasOffers ? "mt-5 md:mt-8" : "mt-8"
             }`}
           >
-            Encuentra perfumes originales, perfumes árabes y decants en Costa Rica, al mejor precio, y acumula puntos de experiencia.
+            Perfumes originales, árabes, diseñador, nicho y decants en Costa Rica, al mejor precio, y acumula puntos de experiencia.
           </motion.p>
         </div>
 

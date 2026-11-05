@@ -49,9 +49,9 @@ export const OPTIONAL_STEPS: StepContent[] = [
   },
   {
     number: 2,
-    title: "Continúa con Google",
+    title: "Regístrate con Google o Crea una cuenta",
     description:
-      'Selecciona "Continuar con Google" y elige la cuenta que deseas usar. Iniciar sesión te permite dar seguimiento a tus pedidos y disfrutar de un checkout más fluido.',
+      'Selecciona "Continuar con Google" y elige la cuenta que deseas usar o crea una nueva cuenta con tu correo y contraseña.',
     icon: LogIn,
     imageAlt: "Pantalla de inicio de sesión con Google.",
   },
