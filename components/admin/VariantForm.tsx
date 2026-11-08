@@ -9,6 +9,8 @@ import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
 import { ADMIN_PRODUCTS_QUERY_KEY } from "@/features/admin/getProductsAdmin";
 import { parseWholesaleFields } from "@/lib/wholesale/variantFields";
+import { classifyVariantWrite } from "@/lib/admin/homepageOffers";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 import type { ProductTypes } from "@/types/product";
 
 interface VariantFormProps {
@@ -106,6 +108,9 @@ export default function VariantForm({ onSuccess }: VariantFormProps) {
         wholesale_price: wholesale.values.wholesale_price,
         min_wholesale_quantity: wholesale.values.min_wholesale_quantity,
       });
+
+      // A new variant created on offer can become (or replace) a hero slide.
+      void notifyHomepageOffers(classifyVariantWrite([{ is_on_offer: form.is_on_offer }]));
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() }),

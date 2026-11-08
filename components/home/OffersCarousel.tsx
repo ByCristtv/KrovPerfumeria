@@ -28,6 +28,23 @@ const TYPE_LABEL: Record<ProductTypes, string> = {
   set: "Set",
 };
 
+/**
+ * "Botella · 100 ml", or "Botella · 100 ml · Por encargo" for an offer KROV
+ * orders from the supplier — the same wording as the catalog card. Inner
+ * spaces are non-breaking so the line wraps between segments, never inside
+ * one ("Por / encargo"). The slide still links to the product page, which owns
+ * the WhatsApp inquiry; nothing here can add a "Por encargo" item to the cart.
+ */
+function presentationLabel(offer: FeaturedOffer): string {
+  return [
+    TYPE_LABEL[offer.productType],
+    `${offer.sizeMl} ml`,
+    ...(offer.availability === "made_to_order" ? ["Por encargo"] : []),
+  ]
+    .map((s) => s.replace(/ /g, " "))
+    .join(" · ");
+}
+
 // ── Browser signals as external stores ──────────────────────────────────────
 // Read through `useSyncExternalStore` so the server snapshot is a fixed value
 // (no hydration mismatch) and nothing has to setState inside an effect.
@@ -288,7 +305,7 @@ export default function OffersCarousel({ offers }: { offers: FeaturedOffer[] }) 
                   {offer.name}
                 </h3>
                 <p className="mt-1 text-[11px] tracking-[0.06em] text-krov-dust">
-                  {TYPE_LABEL[offer.productType]} · {offer.sizeMl} ml
+                  {presentationLabel(offer)}
                 </p>
 
                 {offer.description && (

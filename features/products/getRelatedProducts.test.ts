@@ -1,64 +1,69 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ProductGender } from "@/types/product";
 
 /**
  * A PostgREST builder recorder.
  *
- * Every chained call is captured, and the builder itself is thenable so the
- * production code can `await` whichever call it ends on. This lets the test
- * assert on the QUERY that was built — which is the whole point here: the bug
- * was a missing filter, and a filter is invisible in the returned rows.
+ * Every chained call is captured (grouped per `from()` = per query), and the
+ * builder itself is thenable so the production code can `await` whichever call
+ * it ends on. This lets the test assert on the QUERY that was built — a filter
+ * is invisible in the returned rows. Responses are served from a queue, one per
+ * awaited query, falling back to the default.
  */
-const { fromMock, calls, setResult } = vi.hoisted(() => {
-  const calls: { method: string; args: unknown[] }[] = [];
-  let result: { data: unknown; error: { message: string } | null } = {
-    data: [],
-    error: null,
-  };
+const { fromMock, queries, setResult, queueResults } = vi.hoisted(() => {
+  type Result = { data: unknown; error: { message: string } | null };
+  const queries: { method: string; args: unknown[] }[][] = [];
+  let fallback: Result = { data: [], error: null };
+  const queue: Result[] = [];
 
   const builder: Record<string, unknown> = {};
   for (const method of ["select", "eq", "neq", "in", "order", "limit"]) {
     builder[method] = (...args: unknown[]) => {
-      calls.push({ method, args });
+      queries[queries.length - 1].push({ method, args });
       return builder;
     };
   }
-  // Thenable: `await builder` resolves to the configured PostgREST response.
-  builder.then = (resolve: (value: unknown) => unknown) => resolve(result);
+  builder.then = (resolve: (value: unknown) => unknown) =>
+    resolve(queue.length > 0 ? queue.shift() : fallback);
 
   return {
-    calls,
+    queries,
     fromMock: vi.fn((table: string) => {
-      calls.push({ method: "from", args: [table] });
+      queries.push([{ method: "from", args: [table] }]);
       return builder;
     }),
-    setResult: (next: typeof result) => {
-      result = next;
+    setResult: (next: Result) => {
+      fallback = next;
+    },
+    queueResults: (...next: Result[]) => {
+      queue.length = 0;
+      queue.push(...next);
     },
   };
 });
 
 vi.mock("@/lib/supabase/client", () => ({ supabase: { from: fromMock } }));
 
-import { getRelatedProducts } from "./getRelatedProducts";
+import { getRelatedProducts, rankByGender } from "./getRelatedProducts";
 
-/** The `select(...)` string the query was built with. */
-function selectClause(): string {
-  return String(calls.find((c) => c.method === "select")?.args[0] ?? "");
+/** The `select(...)` string query `n` was built with. */
+function selectClause(n = 0): string {
+  return String(queries[n]?.find((c) => c.method === "select")?.args[0] ?? "");
 }
 
-/** Every `.eq(column, value)` pair recorded on the query. */
-function eqFilters(): [string, unknown][] {
-  return calls
+/** Every `.eq(column, value)` pair recorded on query `n`. */
+function eqFilters(n = 0): [string, unknown][] {
+  return (queries[n] ?? [])
     .filter((c) => c.method === "eq")
     .map((c) => [String(c.args[0]), c.args[1]] as [string, unknown]);
 }
 
-function productRow(id: string) {
+function productRow(id: string, gender: ProductGender = "unisex") {
   return {
     id,
     name: `Product ${id}`,
     slug: `product-${id}`,
-    gender: "unisex",
+    gender,
     concentration: "EDP",
     decant_stock_ml: 0,
     brands: { name: "KROV" },
@@ -75,29 +80,32 @@ function productRow(id: string) {
   };
 }
 
+const ok = (data: unknown) => ({ data, error: null });
+
+function source(
+  overrides: Partial<{ id: string; gender: ProductGender | null; categoryIds: string[] }> = {}
+) {
+  return { id: "p-1", gender: "masculine" as ProductGender | null, categoryIds: ["c-1"], ...overrides };
+}
+
 describe("getRelatedProducts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    calls.length = 0;
+    queries.length = 0;
     setResult({ data: [], error: null });
+    queueResults();
   });
 
-  // ── Task 3: the 404 regression ───────────────────────────────────────────
+  // ── The 404 regression ───────────────────────────────────────────────────
   describe("only recommends products a visitor can actually open", () => {
     it("filters the featured variant to is_active = true", async () => {
-      // THE FIX. Without this, a card can point at a product whose variants are
-      // all deactivated — and app/products/[slug] calls notFound() for those.
-      await getRelatedProducts("p-1", ["c-1"]);
+      await getRelatedProducts(source());
 
       expect(eqFilters()).toContainEqual(["featured_variant.is_active", true]);
     });
 
     it("inner-joins the featured variant so the filter prunes the PARENT row", async () => {
-      // Without `!inner`, PostgREST empties the embedded object and STILL
-      // returns the product — the 404 would survive the filter.
-      expect.assertions(1);
-
-      await getRelatedProducts("p-1", ["c-1"]);
+      await getRelatedProducts(source());
 
       expect(selectClause()).toContain(
         "featured_variant:product_variants!fk_featured_variant!inner"
@@ -105,69 +113,122 @@ describe("getRelatedProducts", () => {
     });
 
     it("still requires the parent product to be active", async () => {
-      await getRelatedProducts("p-1", ["c-1"]);
+      await getRelatedProducts(source());
 
       expect(eqFilters()).toContainEqual(["is_active", true]);
     });
 
-    it("returns nothing when every candidate was pruned as inactive", async () => {
-      setResult({ data: [], error: null });
+    it("applies the same visibility rules to the gender fallback query", async () => {
+      await getRelatedProducts(source());
 
-      await expect(getRelatedProducts("p-1", ["c-1"])).resolves.toEqual([]);
+      expect(queries).toHaveLength(2);
+      expect(eqFilters(1)).toContainEqual(["featured_variant.is_active", true]);
+      expect(eqFilters(1)).toContainEqual(["is_active", true]);
+      expect(selectClause(1)).toContain("product_variants!fk_featured_variant!inner");
     });
   });
 
-  // ── Existing behaviour that must not regress ─────────────────────────────
+  // ── Matching ────────────────────────────────────────────────────────────
   it("excludes the product being viewed", async () => {
-    await getRelatedProducts("p-1", ["c-1"]);
+    await getRelatedProducts(source());
 
-    expect(calls).toContainEqual({ method: "neq", args: ["id", "p-1"] });
+    expect(queries[0]).toContainEqual({ method: "neq", args: ["id", "p-1"] });
   });
 
-  it("matches on the given categories", async () => {
-    await getRelatedProducts("p-1", ["c-1", "c-2"]);
+  it("matches on the given commercial categories, inner-joined", async () => {
+    await getRelatedProducts(source({ categoryIds: ["c-1", "c-2"] }));
 
-    expect(calls).toContainEqual({
-      method: "in",
-      args: ["categories.id", ["c-1", "c-2"]],
-    });
+    expect(queries[0]).toContainEqual({ method: "in", args: ["categories.id", ["c-1", "c-2"]] });
+    expect(selectClause()).toContain("categories!inner");
   });
 
-  it("short-circuits without a round-trip when the product has no categories", async () => {
-    const result = await getRelatedProducts("p-1", []);
+  it("keeps gender relevance through products.gender (masculine → masculine + unisex)", async () => {
+    await getRelatedProducts(source({ gender: "masculine" }));
+
+    expect(queries[0]).toContainEqual({ method: "in", args: ["gender", ["masculine", "unisex"]] });
+  });
+
+  it("never recommends masculine perfumes next to a feminine one", async () => {
+    await getRelatedProducts(source({ gender: "feminine" }));
+
+    for (const query of queries) {
+      expect(query).toContainEqual({ method: "in", args: ["gender", ["feminine", "unisex"]] });
+    }
+  });
+
+  it("ranks the same gender before unisex", async () => {
+    queueResults(ok([productRow("u", "unisex"), productRow("m", "masculine")]));
+
+    const result = await getRelatedProducts(source({ gender: "masculine" }), 2);
+
+    expect(result.map((p) => p.id)).toEqual(["m", "u"]);
+  });
+
+  it("does not run the fallback when the category query filled every slot", async () => {
+    queueResults(ok([productRow("a", "masculine"), productRow("b", "masculine")]));
+
+    await getRelatedProducts(source(), 2);
+
+    expect(queries).toHaveLength(1);
+  });
+
+  it("fills empty slots from the gender fallback, without a category join", async () => {
+    queueResults(ok([productRow("a", "masculine")]), ok([productRow("a", "masculine"), productRow("b", "unisex")]));
+
+    const result = await getRelatedProducts(source(), 2);
+
+    expect(result.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(selectClause(1)).not.toContain("categories!inner");
+    expect(queries[1].some((c) => c.method === "in" && c.args[0] === "categories.id")).toBe(false);
+    expect(queries[1]).toContainEqual({ method: "in", args: ["gender", ["masculine", "unisex"]] });
+  });
+
+  it("recommends by gender alone when the product has no commercial category", async () => {
+    queueResults(ok([productRow("b", "masculine")]));
+
+    const result = await getRelatedProducts(source({ categoryIds: [] }));
+
+    expect(queries).toHaveLength(1);
+    expect(selectClause()).not.toContain("categories!inner");
+    expect(result.map((p) => p.id)).toEqual(["b"]);
+  });
+
+  it("matches on categories only when the gender is unknown", async () => {
+    await getRelatedProducts(source({ gender: null }));
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0].some((c) => c.method === "in" && c.args[0] === "gender")).toBe(false);
+  });
+
+  it("short-circuits without a round-trip with neither categories nor gender", async () => {
+    const result = await getRelatedProducts(source({ gender: null, categoryIds: [] }));
 
     expect(result).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("deduplicates products the multi-category join returned twice", async () => {
-    setResult({
-      data: [productRow("a"), productRow("a"), productRow("b")],
-      error: null,
-    });
+    queueResults(ok([productRow("a"), productRow("a"), productRow("b")]));
 
-    const result = await getRelatedProducts("p-1", ["c-1", "c-2"]);
+    const result = await getRelatedProducts(source({ gender: "unisex" }), 2);
 
     expect(result.map((p) => p.id)).toEqual(["a", "b"]);
   });
 
-  it("clamps to the requested limit", async () => {
-    setResult({
-      data: [productRow("a"), productRow("b"), productRow("c")],
-      error: null,
-    });
+  it("clamps to the requested limit (with slack in the candidate window)", async () => {
+    queueResults(ok([productRow("a"), productRow("b"), productRow("c")]));
 
-    const result = await getRelatedProducts("p-1", ["c-1"], 2);
+    const result = await getRelatedProducts(source({ gender: "unisex" }), 2);
 
     expect(result).toHaveLength(2);
-    expect(calls).toContainEqual({ method: "limit", args: [2] });
+    expect(queries[0]).toContainEqual({ method: "limit", args: [6] });
   });
 
   it("degrades to no recommendations on a query error", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     setResult({ data: null, error: { message: "boom" } });
 
-    await expect(getRelatedProducts("p-1", ["c-1"])).resolves.toEqual([]);
+    await expect(getRelatedProducts(source())).resolves.toEqual([]);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -175,6 +236,26 @@ describe("getRelatedProducts", () => {
   it("treats a null payload as no recommendations", async () => {
     setResult({ data: null, error: null });
 
-    await expect(getRelatedProducts("p-1", ["c-1"])).resolves.toEqual([]);
+    await expect(getRelatedProducts(source())).resolves.toEqual([]);
+  });
+});
+
+describe("rankByGender", () => {
+  it("is stable within a rank and pushes unrelated genders last", () => {
+    const rows = [
+      productRow("f1", "feminine"),
+      productRow("u1", "unisex"),
+      productRow("m1", "masculine"),
+      productRow("u2", "unisex"),
+      productRow("m2", "masculine"),
+    ] as never[];
+
+    expect(rankByGender(rows, "masculine").map((r: { id: string }) => r.id)).toEqual([
+      "m1",
+      "m2",
+      "u1",
+      "u2",
+      "f1",
+    ]);
   });
 });

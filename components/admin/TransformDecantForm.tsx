@@ -9,6 +9,7 @@ import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { DECANT_STOCK_QUERY_KEY } from "@/features/admin/getDecantStock";
 import { ADMIN_PRODUCTS_QUERY_KEY } from "@/features/admin/getProductsAdmin";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 
 interface TransformDecantFormProps {
   onSuccess?: () => void;
@@ -83,6 +84,10 @@ export default function TransformDecantForm({
         quantity: qty,
         notes,
       });
+
+      // Moves units from a bottle into the product's decant pool: either side
+      // may be on offer, so let the server check this product's offers.
+      void notifyHomepageOffers({ scope: "product", productId: selected.product_id });
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: DECANT_STOCK_QUERY_KEY }),

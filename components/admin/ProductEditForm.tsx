@@ -6,9 +6,15 @@ import AdminSelect from "@/components/admin/ui/AdminSelect";
 import { useQueryClient } from "@tanstack/react-query";
 import { updateProduct, getProductForEdit } from "@/features/admin/updateProduct";
 import { useCategories } from "@/hooks/useCategories";
+import { isGenderCategorySlug } from "@/lib/catalogCategoryFilter";
 import { useBrands } from "@/hooks/useBrands";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
 import { ADMIN_PRODUCTS_QUERY_KEY } from "@/features/admin/getProductsAdmin";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
+import {
+  classifyProductEdit,
+  type ProductEditSnapshot,
+} from "@/lib/admin/homepageOffers";
 import ProductImagesManager from "@/components/admin/ProductImagesManager";
 import {
   parseWholesaleFields,
@@ -46,6 +52,30 @@ type ProductFormState = {
 
 type Option<V extends string = string> = { value: V; label: string };
 
+/**
+ * The hero-relevant view of the form, normalised exactly like the submit
+ * payload (numbers, decant stock = 0, offer price null when off), so comparing
+ * the loaded snapshot with the submitted one never reports a phantom change.
+ */
+function heroSnapshot(form: ProductFormState): ProductEditSnapshot {
+  return {
+    product: {
+      name: form.name,
+      brand_id: form.brand_id,
+      description: form.description,
+    },
+    variant: {
+      price: Number(form.price),
+      offer_price: form.is_on_offer ? Number(form.offer_price) : null,
+      is_on_offer: form.is_on_offer,
+      stock: form.product_type === "decant" ? 0 : Number(form.stock),
+      is_active: form.is_active,
+      product_type: form.product_type,
+      size_ml: Number(form.size_ml),
+    },
+  };
+}
+
 export default function ProductEditForm({
   productId,
   variantId,
@@ -74,6 +104,9 @@ export default function ProductEditForm({
     min_wholesale_quantity: "",
   });
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // What the hero saw when the form loaded (or was last saved): the baseline
+  // for deciding whether a save must revalidate the homepage.
+  const [savedSnapshot, setSavedSnapshot] = useState<ProductEditSnapshot | null>(null);
 
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
@@ -94,7 +127,7 @@ export default function ProductEditForm({
           variantId
         );
         if (cancelled) return;
-        setForm({
+        const loaded: ProductFormState = {
           name: product.name ?? "",
           brand_id: product.brand_id ?? "",
           description: product.description ?? "",
@@ -118,7 +151,9 @@ export default function ProductEditForm({
           min_wholesale_quantity: wholesaleFieldToInput(
             variant.min_wholesale_quantity
           ),
-        });
+        };
+        setForm(loaded);
+        setSavedSnapshot(heroSnapshot(loaded));
         setSelectedCategories(category_ids);
       } catch (err) {
         Swal.fire({
@@ -173,6 +208,15 @@ export default function ProductEditForm({
         category_ids: selectedCategories,
       });
 
+      // Only a save that can change a hero slide revalidates the homepage.
+      const submitted = heroSnapshot(form);
+      if (savedSnapshot) {
+        void notifyHomepageOffers(
+          classifyProductEdit(productId, savedSnapshot, submitted)
+        );
+      }
+      setSavedSnapshot(submitted);
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() }),
         queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY }),
@@ -208,7 +252,10 @@ export default function ProductEditForm({
   const brandOptions = brands.map((b) => ({ value: b.id, label: b.name }));
   const selectedBrand = brandOptions.find((b) => b.value === form.brand_id) ?? null;
 
-  const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }));
+  // Commercial categories only: gender is the "Género" field (products.gender).
+  const categoryOptions = categories
+    .filter((c) => !isGenderCategorySlug(c.slug))
+    .map((c) => ({ value: c.id, label: c.name }));
   const selectedCategoryValues = categoryOptions.filter((c) =>
     selectedCategories.includes(c.value)
   );

@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OffersCarousel, { OFFER_ROTATION_MS } from "./OffersCarousel";
 import type { FeaturedOffer } from "@/types/product";
 
-function offer(n: number): FeaturedOffer {
+function offer(n: number, overrides: Partial<FeaturedOffer> = {}): FeaturedOffer {
   return {
     productId: `p${n}`,
     variantId: `v${n}`,
+    availability: "in_stock",
+    ...overrides,
     name: `Perfume ${n}`,
     brand: "Lattafa",
     description: null,
@@ -66,6 +68,28 @@ describe("OffersCarousel", () => {
       "href",
       "/products/perfume-1?variant=v1"
     );
+  });
+
+  it("an in-stock offer is labelled by type and size only", () => {
+    render(<OffersCarousel offers={[offer(1)]} />);
+    // The matcher normalises whitespace (NBSP included); textContent does not.
+    expect(screen.getByText("Botella · 100 ml").textContent).toBe("Botella · 100 ml");
+    expect(screen.queryByText(/Por encargo/)).toBeNull();
+  });
+
+  it("a made-to-order offer says 'Por encargo' and still routes to the product page", () => {
+    render(<OffersCarousel offers={[offer(1, { availability: "made_to_order" })]} />);
+    // Same wording as the catalog card; non-breaking inside each segment.
+    expect(screen.getByText("Botella · 100 ml · Por encargo").textContent).toBe(
+      "Botella · 100 ml · Por encargo"
+    );
+    // The only actions are links to the detail page (which owns the WhatsApp
+    // inquiry) — there is no add-to-cart control on a slide.
+    expect(screen.getByRole("link", { name: "Ver oferta: Perfume 1" })).toHaveAttribute(
+      "href",
+      "/products/perfume-1?variant=v1"
+    );
+    expect(screen.queryByRole("button", { name: /carrito|agregar/i })).toBeNull();
   });
 
   it("a single offer has no controls and never rotates", () => {

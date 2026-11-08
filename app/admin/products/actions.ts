@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { isHomepageOfferChange, type HomepageOfferChange } from "@/lib/admin/homepageOffers";
 import type { ActionResult } from "@/types/action";
 
 export interface SupplierAvailabilityResult {
@@ -166,6 +167,77 @@ export async function setProductTrendingAction(
     message: trending ? "Marcado como tendencia." : "Quitado de tendencias.",
     data: { product_id: data.id, is_trending: data.is_trending === true },
   };
+}
+
+/**
+ * Revalidate the homepage after an admin write that may change its featured
+ * offers (the hero carousel; see features/products/getFeaturedOffers.ts).
+ *
+ * The admin forms write through the browser Supabase client (RLS-protected,
+ * admin-only), so they cannot call `revalidatePath` themselves. Each form
+ * classifies its own write with lib/admin/homepageOffers.ts and calls this only
+ * when a slide could change; unrelated saves (notes, categories, wholesale
+ * prices, a non-offer variant's stock) never reach it.
+ *
+ *   · scope "offers"  — eligibility changed → revalidate "/" unconditionally
+ *                       (the write may have REMOVED a slide).
+ *   · scope "product" — only something a slide displays changed → revalidate
+ *                       only if that product has an active on-offer variant
+ *                       right now. If that check fails we revalidate anyway: one
+ *                       spare regeneration is cheaper than a stale hero.
+ *
+ * Revalidation marks "/" stale; the next visit regenerates it. The 300 s ISR
+ * window stays as the backstop for anything that bypasses this (Studio edits,
+ * checkout stock decrements). Same layering as the actions above: the role is
+ * re-checked here because a server action can be POSTed directly.
+ */
+export async function revalidateHomepageOffersAction(
+  change: HomepageOfferChange
+): Promise<ActionResult<{ revalidated: boolean }>> {
+  if (!isHomepageOfferChange(change)) {
+    return { ok: false, message: "Cambio inválido." };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, message: "Tu sesión expiró. Vuelve a iniciar sesión." };
+  }
+
+  const { data: caller } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (caller?.role !== "admin") {
+    return { ok: false, message: "No tienes permiso para realizar esta acción." };
+  }
+
+  if (change.scope === "product") {
+    const { data, error } = await supabase
+      .from("product_variants")
+      .select("id")
+      .eq("product_id", change.productId)
+      .eq("is_on_offer", true)
+      .eq("is_active", true)
+      .limit(1);
+
+    if (error) {
+      console.error("[admin/products/actions] homepage offer check failed", error);
+    } else if ((data ?? []).length === 0) {
+      return {
+        ok: true,
+        message: "El producto no está en oferta; la portada no cambia.",
+        data: { revalidated: false },
+      };
+    }
+  }
+
+  revalidatePath("/");
+  return { ok: true, message: "Portada actualizada.", data: { revalidated: true } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

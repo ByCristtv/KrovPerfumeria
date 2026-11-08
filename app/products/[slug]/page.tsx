@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getProductBySlug } from "@/features/products/getProductBySlug";
 import { getRelatedProducts } from "@/features/products/getRelatedProducts";
+import { commercialCategoryIds } from "@/lib/catalogCategoryFilter";
 import ProductDetailView from "@/components/product/detail/ProductDetailView";
 import JsonLd from "@/components/seo/JsonLd";
 import { breadcrumbSchema, productGroupSchema } from "@/lib/seo/jsonLd";
@@ -59,9 +60,14 @@ export default async function ProductPage({
     notFound();
   }
 
+  // Gender relevance comes from products.gender; categories contribute only
+  // their commercial ids (Árabe, Nicho, …), never the legacy gender rows.
   const related = await getRelatedProducts(
-    product.id,
-    product.categories.map((c) => c.id),
+    {
+      id: product.id,
+      gender: product.gender ?? null,
+      categoryIds: commercialCategoryIds(product.categories),
+    },
     4
   );
 

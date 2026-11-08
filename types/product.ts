@@ -2,6 +2,13 @@ import { Database } from "./database";
 
 export type ProductTypes = "full_size" | "decant" | "set"
 
+/**
+ * A product's audience. `products.gender` is the ONLY place it is stored: the
+ * Hombre / Mujer / Unisex catalog filters resolve to these values (see
+ * lib/catalogCategoryFilter.ts), never to category association rows.
+ */
+export type ProductGender = "masculine" | "feminine" | "unisex";
+
 export type BaseCartItem = Database["public"]["Tables"]["cart_items"]["Row"];
 
 export interface AdminProductCategory {
@@ -78,7 +85,7 @@ export interface ProductDetailData {
   name: string;
   slug: string;
   description: string | null;
-  gender: "masculine" | "feminine" | "unisex";
+  gender: ProductGender;
   concentration: string;
   notes_top: string | null;
   notes_middle: string | null;
@@ -87,7 +94,8 @@ export interface ProductDetailData {
   /** Shared decant ml pool — drives dynamic decant stock (see lib/stock.ts). */
   decant_stock_ml: number;
   brands: { name: string } | null;
-  categories: { id: string; name: string }[];
+  /** `slug` lets callers tell commercial categories from the legacy gender ones. */
+  categories: { id: string; name: string; slug?: string }[];
   product_variants: ProductVariant[];
   product_images: {
     url: string;
@@ -121,7 +129,7 @@ export interface ProductCardData {
   id: string;
   name: string;
   slug: string;
-  gender: "masculine" | "feminine" | "unisex";
+  gender: ProductGender;
   concentration: string;
   brands: { name: string } | null;
   /** Parent decant pool — the only inventory every decant variant draws from. */
@@ -143,13 +151,19 @@ export interface ProductCardData {
 
 /**
  * One slide of the homepage offers carousel. Built server-side from a variant
- * that is on offer, active, in stock and carries a VALID promotional price
- * (`0 < offer_price < price`) — see `features/products/getFeaturedOffers.ts`.
- * One entry per parent product.
+ * that is on offer, active, obtainable (in stock OR supplier-confirmed "Por
+ * encargo") and carries a VALID promotional price (`0 < offer_price < price`)
+ * — see `features/products/getFeaturedOffers.ts`. One entry per parent product.
  */
 export interface FeaturedOffer {
   productId: string;
   variantId: string;
+  /**
+   * How the offer can be had, from `resolveAvailability` (lib/stock.ts):
+   * `in_stock` = normal cart flow; `made_to_order` = "Por encargo", WhatsApp
+   * inquiry on the product page only. Sold-out variants never become slides.
+   */
+  availability: "in_stock" | "made_to_order";
   name: string;
   brand: string | null;
   description: string | null;

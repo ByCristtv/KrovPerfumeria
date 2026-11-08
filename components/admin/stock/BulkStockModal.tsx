@@ -10,6 +10,8 @@ import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { registerBulkStock } from "@/features/admin/registerBulkStock";
 import { ADMIN_PRODUCTS_QUERY_KEY } from "@/features/admin/getProductsAdmin";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
+import { classifyVariantWrite } from "@/lib/admin/homepageOffers";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 
 interface BulkStockModalProps {
   open: boolean;
@@ -112,6 +114,13 @@ export default function BulkStockModal({
     try {
       setSubmitting(true);
       const result = await registerBulkStock(items, notes);
+
+      // Restocking an on-offer variant can bring it back onto the hero (or
+      // turn a "Por encargo" slide into an in-stock one).
+      const touched = new Set(items.map((it) => it.variant_id));
+      void notifyHomepageOffers(
+        classifyVariantWrite(variants.filter((v) => touched.has(v.variant_id)))
+      );
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY }),

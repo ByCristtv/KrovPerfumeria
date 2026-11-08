@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
-import { availableUnits } from "@/lib/stock";
+import { resolveAvailability } from "@/lib/stock";
 import { productPath } from "@/lib/seo/product";
 import type { FeaturedOffer, ProductTypes } from "@/types/product";
 
@@ -7,11 +7,13 @@ import type { FeaturedOffer, ProductTypes } from "@/types/product";
 export const FEATURED_OFFERS_LIMIT = 6;
 
 /**
- * Variant rows fetched per call. Several variants of one product can be on
- * offer at once and some will be filtered out (no stock, invalid price), so we
- * over-fetch a little and collapse to one slide per product afterwards.
+ * Upper bound on on-offer variant rows read per render. Ranking happens in
+ * memory (the saving is a ratio of two columns, which PostgREST cannot order
+ * by), so the window has to hold every current offer; the catalog runs a few
+ * dozen at most. Hitting the cap is logged — raise it rather than let offers
+ * silently fall out of the ranking.
  */
-const CANDIDATE_CAP = 30;
+const CANDIDATE_CAP = 200;
 
 /** Raw row shape returned by the select below. */
 export interface OfferVariantRow {
@@ -22,6 +24,8 @@ export interface OfferVariantRow {
   stock: number;
   size_ml: number;
   product_type: ProductTypes;
+  /** `true` only when an admin verified the supplier has it; anything else = not verified. */
+  supplier_available?: boolean | null;
   product: {
     id: string;
     name: string;
@@ -65,16 +69,59 @@ function pickImage(row: OfferVariantRow) {
 }
 
 /**
+ * Bigger saving first, compared EXACTLY. The saving ratio is
+ * (price − offer) / price; cross-multiplying compares two ratios without
+ * dividing, so equal discounts (20 000 → 16 000 and 50 000 → 40 000) are equal
+ * rather than one floating-point ulp apart. Both prices are already validated
+ * positive by `discountPercent`, so there is no zero denominator.
+ */
+function compareSaving(a: FeaturedOffer, b: FeaturedOffer): number {
+  return (b.price - b.offerPrice) * a.price - (a.price - a.offerPrice) * b.price;
+}
+
+const AVAILABILITY_RANK: Record<FeaturedOffer["availability"], number> = {
+  in_stock: 0,
+  made_to_order: 1,
+};
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The single, total order for offers — used both to pick a product's best
+ * variant and to rank the slides, so neither depends on database row order:
+ *
+ *   1. biggest saving (exact ratio; see `compareSaving`);
+ *   2. at an equal saving, one KROV can ship today before a "Por encargo" one;
+ *   3. product name (es collation), then product id, then variant id — a
+ *      stable, meaningless-but-fixed tie-break so the carousel never reshuffles
+ *      between renders.
+ */
+export function compareOffers(a: FeaturedOffer, b: FeaturedOffer): number {
+  return (
+    compareSaving(a, b) ||
+    AVAILABILITY_RANK[a.availability] - AVAILABILITY_RANK[b.availability] ||
+    a.name.localeCompare(b.name, "es") ||
+    compareText(a.productId, b.productId) ||
+    compareText(a.variantId, b.variantId)
+  );
+}
+
+/**
  * Pure transform from variant rows to carousel slides. Exported for tests.
  *
  * A row becomes a slide only when it can honestly be advertised:
  *   · `is_on_offer` and a valid promotional price (`0 < offer_price < price`)
  *     — a flagged variant whose `offer_price` is missing or not lower would
  *     sell at full price, so it isn't promoted as an offer;
- *   · sellable right now per `availableUnits` (decants derive from the pool).
+ *   · obtainable per `resolveAvailability`, the one availability rule the
+ *     catalog card and the detail page also use: `in_stock` (decants derive
+ *     from the pool) or `made_to_order` (no units, supplier verified). A
+ *     `sold_out` variant is never promoted.
  *
- * Rows arrive newest-first. When a product has several qualifying variants the
- * one with the biggest saving represents it, at the product's first position.
+ * One slide per product — its best variant by `compareOffers` — and the slides
+ * are ranked by `compareOffers` too, so the result is independent of row order.
  */
 export function toFeaturedOffers(
   rows: OfferVariantRow[],
@@ -88,20 +135,18 @@ export function toFeaturedOffers(
 
     const pct = discountPercent(row.price, row.offer_price);
     if (pct === null) continue;
-    if (availableUnits(row, product.decant_stock_ml) <= 0) continue;
 
-    const existing = byProduct.get(product.id);
-    if (existing && (existing.discountPercent ?? 0) >= pct) continue;
+    const { status } = resolveAvailability(row, product.decant_stock_ml);
+    if (status === "sold_out") continue;
 
     const image = pickImage(row);
     const brand = product.brands?.name ?? null;
     const description = product.description?.trim() || null;
 
-    // Map preserves first-insertion order, so replacing a product's entry
-    // keeps its (newest-first) slot.
-    byProduct.set(product.id, {
+    const candidate: FeaturedOffer = {
       productId: product.id,
       variantId: row.id,
+      availability: status,
       name: product.name,
       brand,
       description,
@@ -112,11 +157,18 @@ export function toFeaturedOffers(
       discountPercent: pct,
       imageUrl: image?.url || "/placeholder.png",
       imageAlt: image?.alt_text?.trim() || [brand, product.name].filter(Boolean).join(" "),
+      // The detail page (with this variant preselected) owns the purchase
+      // decision: cart for in-stock, the WhatsApp inquiry for "Por encargo".
       href: `${productPath(product.slug)}?variant=${row.id}`,
-    });
+    };
+
+    const existing = byProduct.get(product.id);
+    if (!existing || compareOffers(candidate, existing) < 0) {
+      byProduct.set(product.id, candidate);
+    }
   }
 
-  return [...byProduct.values()].slice(0, limit);
+  return [...byProduct.values()].sort(compareOffers).slice(0, limit);
 }
 
 /**
@@ -130,8 +182,15 @@ export function toFeaturedOffers(
  *
  * Visibility mirrors the detail page: active variant + active parent
  * (`!inner` prunes rows whose product is hidden), and the anon client keeps
- * RLS in force. Never throws — any failure degrades to "no offers", which the
- * hero renders as its non-promotional layout.
+ * RLS in force. The rows are read in a fixed order (by id) and ranked in
+ * memory, so an unrelated edit (a stock decrement, a supplier re-check) can no
+ * longer reshuffle which offers make the cut.
+ *
+ * Freshness: the homepage is ISR (`revalidate = 300`); admin writes that change
+ * an offer revalidate "/" on demand (lib/admin/homepageOffers.ts).
+ *
+ * Never throws — any failure degrades to "no offers", which the hero renders as
+ * its non-promotional layout.
  */
 export async function getFeaturedOffers(): Promise<FeaturedOffer[]> {
   try {
@@ -146,6 +205,7 @@ export async function getFeaturedOffers(): Promise<FeaturedOffer[]> {
         stock,
         size_ml,
         product_type,
+        supplier_available,
         product:products!product_variants_product_id_fkey!inner (
           id,
           name,
@@ -160,7 +220,7 @@ export async function getFeaturedOffers(): Promise<FeaturedOffer[]> {
       .eq("is_on_offer", true)
       .eq("is_active", true)
       .eq("product.is_active", true)
-      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true })
       .limit(CANDIDATE_CAP);
 
     if (error) {
@@ -168,7 +228,14 @@ export async function getFeaturedOffers(): Promise<FeaturedOffer[]> {
       return [];
     }
 
-    return toFeaturedOffers((data as unknown as OfferVariantRow[]) ?? []);
+    const rows = (data as unknown as OfferVariantRow[]) ?? [];
+    if (rows.length >= CANDIDATE_CAP) {
+      console.warn(
+        `getFeaturedOffers: ${rows.length} on-offer variants hit CANDIDATE_CAP; some offers were not ranked.`
+      );
+    }
+
+    return toFeaturedOffers(rows);
   } catch (err) {
     console.error("getFeaturedOffers failed:", err instanceof Error ? err.message : err);
     return [];

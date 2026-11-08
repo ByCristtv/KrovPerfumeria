@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { useQueryClient } from "@tanstack/react-query";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 import {
   getProductImages,
   addProductImage,
@@ -50,8 +51,12 @@ export default function ProductImagesManager({ productId }: ProductImagesManager
     };
   }, [productId]);
 
-  const invalidateCatalog = () =>
-    queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() });
+  const invalidateCatalog = () => {
+    // The gallery feeds the hero slide's image when this product is on offer;
+    // the server checks that, so a non-offer product never revalidates "/".
+    void notifyHomepageOffers({ scope: "product", productId });
+    return queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() });
+  };
 
   const handleAdd = async (file: File | null) => {
     if (!file) return;

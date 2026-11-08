@@ -6,6 +6,9 @@ import AdminSelect from "@/components/admin/ui/AdminSelect";
 import { useQueryClient } from "@tanstack/react-query";
 import { createProduct } from "@/features/admin/createProduct";
 import { useCategories } from "@/hooks/useCategories";
+import { isGenderCategorySlug } from "@/lib/catalogCategoryFilter";
+import { classifyVariantWrite } from "@/lib/admin/homepageOffers";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 import { useBrands } from "@/hooks/useBrands";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/useProducts";
 import { ADMIN_PRODUCTS_QUERY_KEY } from "@/features/admin/getProductsAdmin";
@@ -132,6 +135,9 @@ export default function ProductForm({ onSuccess }: ProductFormProps = {}) {
         file,
       });
 
+      // A product created already on offer can be a hero slide right away.
+      void notifyHomepageOffers(classifyVariantWrite([{ is_on_offer: form.is_on_offer }]));
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY() }),
         queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY }),
@@ -230,7 +236,10 @@ export default function ProductForm({ onSuccess }: ProductFormProps = {}) {
                 instanceId="category-select"
                 isMulti
                 className="input-field-custom"
-                options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                // Commercial categories only: gender is the "Género" field.
+                options={categories
+                  .filter((c) => !isGenderCategorySlug(c.slug))
+                  .map((c) => ({ value: c.id, label: c.name }))}
                 onChange={(opts) =>
                   setSelectedCategories(opts.map((o) => o.value))
                 }

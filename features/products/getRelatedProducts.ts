@@ -1,10 +1,38 @@
 import { supabase } from "@/lib/supabase/client";
-import type { ProductCardData } from "@/types/product";
+import { relatedGenders } from "@/lib/catalogCategoryFilter";
+import type { ProductCardData, ProductGender } from "@/types/product";
+
+/** The product being viewed, as the recommendation query needs it. */
+export interface RelatedProductSource {
+  id: string;
+  /** `products.gender` — the only source of a product's audience. */
+  gender: ProductGender | null;
+  /**
+   * COMMERCIAL category ids only (Árabe, Nicho, Diseñador, …). Callers strip the
+   * legacy gender categories with `commercialCategoryIds`, so gender relevance
+   * comes from `gender`, never from association rows.
+   */
+  categoryIds: string[];
+}
 
 /**
- * Fetch products that share at least one category with the given product,
- * excluding the product itself. Used for the "También te puede gustar"
- * section on the detail page.
+ * Candidates fetched per query, as a multiple of the requested limit: the
+ * gender ranking and the de-duplication both need some slack to choose from.
+ */
+const CANDIDATE_FACTOR = 3;
+
+/**
+ * Fetch products related to the one being viewed, for the "También te puede
+ * gustar" section on the detail page. Never includes the product itself.
+ *
+ * Relevance, best first:
+ *   1. Shares a commercial category AND a compatible gender
+ *      (masculine ↔ masculine/unisex, feminine ↔ feminine/unisex, unisex ↔ any),
+ *      same gender ranked before unisex.
+ *   2. If that leaves empty slots: a compatible gender alone. Without this, a
+ *      product with no commercial category (common once gender stopped being a
+ *      category) would get no recommendations at all.
+ *   A product whose gender is unknown matches on categories only, as before.
  *
  * ACTIVE VARIANTS ONLY — this is load-bearing, not a nicety.
  *
@@ -32,13 +60,80 @@ import type { ProductCardData } from "@/types/product";
  * guarantees the detail page has at least one variant to show.
  */
 export async function getRelatedProducts(
-  productId: string,
-  categoryIds: string[],
+  source: RelatedProductSource,
   limit = 4
 ): Promise<ProductCardData[]> {
-  if (categoryIds.length === 0) return [];
+  const genders = relatedGenders(source.gender);
+  const picked: ProductCardData[] = [];
+  const seen = new Set<string>([source.id]);
 
-  const { data, error } = await supabase
+  // Deduplicate (the multi-category join may return a product twice) and clamp.
+  const take = (rows: ProductCardData[]) => {
+    for (const row of rankByGender(rows, source.gender)) {
+      if (picked.length >= limit) return;
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      picked.push(row);
+    }
+  };
+
+  if (source.categoryIds.length > 0) {
+    take(
+      await fetchCandidates({
+        excludeId: source.id,
+        categoryIds: source.categoryIds,
+        genders,
+        limit: limit * CANDIDATE_FACTOR,
+      })
+    );
+  }
+
+  if (picked.length < limit && genders) {
+    take(
+      await fetchCandidates({
+        excludeId: source.id,
+        categoryIds: null,
+        genders,
+        // Over-fetch by what is already picked: those rows may come back again.
+        limit: limit * CANDIDATE_FACTOR + picked.length,
+      })
+    );
+  }
+
+  return picked;
+}
+
+/**
+ * Order candidates by how well their gender matches (`relatedGenders` order).
+ * Stable: rows of equal rank keep the order the database returned them in.
+ */
+export function rankByGender(
+  rows: ProductCardData[],
+  gender: ProductGender | null
+): ProductCardData[] {
+  const order = relatedGenders(gender);
+  if (!order) return rows;
+  const rank = (row: ProductCardData) => {
+    const i = order.indexOf(row.gender);
+    return i === -1 ? order.length : i;
+  };
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index)
+    .map(({ row }) => row);
+}
+
+async function fetchCandidates(args: {
+  excludeId: string;
+  /** `null` = don't require a shared category. */
+  categoryIds: string[] | null;
+  /** `null` = no gender preference. */
+  genders: ProductGender[] | null;
+  limit: number;
+}): Promise<ProductCardData[]> {
+  const byCategory = args.categoryIds !== null;
+
+  let query = supabase
     .from("products")
     .select(
       `
@@ -49,7 +144,7 @@ export async function getRelatedProducts(
       concentration,
       decant_stock_ml,
       brands ( name ),
-      categories!inner ( id, name ),
+      ${byCategory ? "categories!inner ( id, name )" : "categories ( id, name )"},
       featured_variant:product_variants!fk_featured_variant!inner (
         id,
         price,
@@ -64,23 +159,17 @@ export async function getRelatedProducts(
     )
     .eq("is_active", true)
     .eq("featured_variant.is_active", true)
-    .neq("id", productId)
-    .in("categories.id", categoryIds)
-    .limit(limit);
+    .neq("id", args.excludeId);
+
+  if (args.categoryIds) query = query.in("categories.id", args.categoryIds);
+  if (args.genders) query = query.in("gender", args.genders);
+
+  const { data, error } = await query.limit(args.limit);
 
   if (error) {
     console.error("getRelatedProducts failed:", error.message);
     return [];
   }
 
-  // Deduplicate (multi-category join may produce dupes) and clamp.
-  const seen = new Set<string>();
-  const unique: ProductCardData[] = [];
-  for (const row of (data as unknown as ProductCardData[]) ?? []) {
-    if (seen.has(row.id)) continue;
-    seen.add(row.id);
-    unique.push(row);
-    if (unique.length >= limit) break;
-  }
-  return unique;
+  return (data as unknown as ProductCardData[]) ?? [];
 }

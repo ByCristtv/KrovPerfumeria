@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { isGenderCategorySlug } from "@/lib/catalogCategoryFilter";
 import type { ProductTypes } from "@/types/product";
 
 export interface UpdateProductPayload {
@@ -33,7 +34,8 @@ export interface UpdateProductPayload {
  *
  * Updates the `products` table row and the `product_variants` row,
  * then syncs `product_categories` by deleting the old set and
- * re-inserting the new one.
+ * re-inserting the new one. `category_ids` are COMMERCIAL categories only;
+ * gender is `payload.gender` (products.gender), never a category row.
  */
 export async function updateProduct(payload: UpdateProductPayload) {
   // 1. Update the product row
@@ -107,7 +109,7 @@ export async function getProductForEdit(productId: string, variantId: string) {
     supabase.from("product_variants").select("*").eq("id", variantId).single(),
     supabase
       .from("product_categories")
-      .select("category_id")
+      .select("category_id, categories ( slug )")
       .eq("product_id", productId),
   ]);
 
@@ -118,6 +120,12 @@ export async function getProductForEdit(productId: string, variantId: string) {
   return {
     product: productRes.data,
     variant: variantRes.data,
-    category_ids: (categoriesRes.data ?? []).map((c) => c.category_id),
+    // Commercial categories only. A product that still carries a legacy
+    // Hombre/Mujer/Unisex row (migration 20261107000100 not yet applied) loads
+    // without it, so saving the form drops it instead of writing it back —
+    // gender is edited through the "Género" field alone.
+    category_ids: (categoriesRes.data ?? [])
+      .filter((c) => !isGenderCategorySlug(c.categories?.slug))
+      .map((c) => c.category_id),
   };
 }

@@ -9,6 +9,8 @@ import {
   setSupplierAvailabilityAction,
 } from "@/app/admin/products/actions";
 import { resolveAvailability, type AvailabilityStatus } from "@/lib/stock";
+import { classifyVariantWrite } from "@/lib/admin/homepageOffers";
+import { notifyHomepageOffers } from "@/features/admin/notifyHomepageOffers";
 import type { AdminVariantRow } from "@/types/product";
 
 const currency = new Intl.NumberFormat("es-CR", {
@@ -332,7 +334,8 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
   const toggleActive = async (
     variantId: string,
     currentlyActive: boolean,
-    label: string
+    label: string,
+    isOnOffer: boolean
   ) => {
     const action = currentlyActive ? "desactivar" : "reactivar";
     const result = await Swal.fire({
@@ -361,6 +364,9 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
       });
       return;
     }
+
+    // (De)activating an on-offer variant adds or removes a hero slide.
+    void notifyHomepageOffers(classifyVariantWrite([{ is_on_offer: isOnOffer }]));
 
     onChanged?.();
 
@@ -484,7 +490,8 @@ export default function ProductListAdmin({ rows, onEdit, onChanged }: ProductLis
                       toggleActive(
                         v.variant_id,
                         v.is_active,
-                        `${v.name} · ${v.size_ml}ml · ${v.sku}`
+                        `${v.name} · ${v.size_ml}ml · ${v.sku}`,
+                        v.is_on_offer
                       )
                     }
                     className={`${

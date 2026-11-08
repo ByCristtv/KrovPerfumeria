@@ -29,7 +29,7 @@ export const getProductBySlug = cache(async function getProductBySlug(
       featured_variant_id,
       decant_stock_ml,
       brands ( name ),
-      categories ( id, name ),
+      categories ( id, name, slug ),
       product_variants!product_variants_product_id_fkey (
         id,
         price,
