@@ -3,9 +3,18 @@ import type { Tables } from "@/types/database";
 /**
  * Customer rank progression, derived ENTIRELY from a profile's XP.
  *
- * Ranks are never persisted — the database stores only `experience_points`
- * (see migration 20260611000100). Everything here is a pure function of that
- * number, so the UI and any server code share one source of truth.
+ * Ranks are never persisted — the database stores only `experience_points`.
+ * WHERE each rank starts is configuration that lives in ONE place: the
+ * `public.levels` table (`required_xp`), which administrators edit from
+ * /admin/rewards and which the database's reward-issuance functions read too.
+ * This module holds no threshold numbers at all: every function takes the
+ * {@link RankLadder} loaded from that table (see features/loyalty/rankLadder.ts
+ * on the server and `useRankLadder()` in the browser), so the UI, the server
+ * and SQL can never disagree about where "Alquimista" starts.
+ *
+ * What DOES live here is each rank's identity — its name and progression order
+ * — and its presentation (badge file). Those are code, not configuration: a new
+ * rank needs a badge and styles before it can be shown.
  *
  * XP rule (mirrors `grant_order_xp` in SQL): 50 XP per full ₡1,000 of an
  * order's DISCOUNTED SUBTOTAL (goods minus any coupon; shipping and tax never
@@ -19,50 +28,121 @@ export type UserRank =
   | "Alquimista"
   | "Maestro";
 
-/** One tier in the ladder. `minXP` is inclusive; the next tier's `minXP` is the cap. */
-export interface RankDefinition {
-  rank: UserRank;
-  minXP: number;
-  /** Badge file inside {@link RANK_ICON_PATH}. */
-  icon: string;
-}
-
 /**
- * THE single source of truth for thresholds — no magic numbers anywhere else.
- * Must stay sorted ascending by `minXP`.
- *
- *   Aficionado     0      – 999
- *   Coleccionista  1,000  – 4,999
- *   Conocedor      5,000  – 9,999
- *   Alquimista     10,000 – 17,999
- *   Maestro        18,000 +
- *
- * (Formerly Fraiche / Cologne / EDT / EDP / Parfum. Only the display names
- * changed — the database stores XP, never a rank, so no data migration.)
+ * The ranks in progression order (level 1 first). Identity only — the XP each
+ * one requires comes from the database. `public.levels` must hold exactly these
+ * names in this order; {@link parseRankLadder} refuses anything else.
  */
-export const RANK_THRESHOLDS: readonly RankDefinition[] = [
-  { rank: "Aficionado", minXP: 0, icon: "Aficionado.avif" },
-  { rank: "Coleccionista", minXP: 1_000, icon: "Coleccionista.avif" },
-  { rank: "Conocedor", minXP: 5_000, icon: "Conocedor.avif" },
-  { rank: "Alquimista", minXP: 10_000, icon: "Alquimista.avif" },
-  { rank: "Maestro", minXP: 18_000, icon: "Krov.avif" },
+export const RANK_ORDER: readonly UserRank[] = [
+  "Aficionado",
+  "Coleccionista",
+  "Conocedor",
+  "Alquimista",
+  "Maestro",
 ] as const;
+
+/** Badge file per rank, inside {@link RANK_ICON_PATH}. */
+const RANK_ICONS: Readonly<Record<UserRank, string>> = {
+  Aficionado: "Aficionado.avif",
+  Coleccionista: "Coleccionista.avif",
+  Conocedor: "Conocedor.avif",
+  Alquimista: "Alquimista.avif",
+  Maestro: "Krov.avif",
+};
 
 /** Folder under `public/` holding the rank badges, 192px for a 96px maximum box. */
 export const RANK_ICON_PATH = "/ranks";
+
+/** One tier of the configured ladder. `minXP` is inclusive. */
+export interface RankTier {
+  /** `levels.level_number` — 1 for the entry rank. */
+  level: number;
+  rank: UserRank;
+  minXP: number;
+}
+
+/**
+ * The ladder as configured in `public.levels`: sorted by level, lowest tier at
+ * 0 XP, strictly increasing. Only {@link parseRankLadder} produces one.
+ */
+export type RankLadder = readonly RankTier[];
+
+/** The `public.levels` columns the ladder is built from. */
+export type LevelRow = Pick<Tables<"levels">, "level_number" | "name" | "required_xp">;
+
+/** The stored ladder does not have the shape every invariant here relies on. */
+export class RankLadderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RankLadderError";
+  }
+}
+
+export function isUserRank(value: unknown): value is UserRank {
+  return typeof value === "string" && (RANK_ORDER as readonly string[]).includes(value);
+}
+
+/**
+ * Validate `public.levels` rows and turn them into a {@link RankLadder}.
+ *
+ * Strict on purpose — the same invariants the database enforces
+ * (trg_levels_enforce_ladder): lowest level at 0 XP and strictly increasing
+ * thresholds. On top of that the names must be exactly {@link RANK_ORDER}, in
+ * order, because badges and styles are keyed by name. A ladder that fails any
+ * of this throws instead of being "repaired", so a drifted database surfaces as
+ * an error rather than as customers silently shown the wrong rank.
+ */
+export function parseRankLadder(rows: readonly LevelRow[]): RankLadder {
+  const sorted = [...rows].sort((a, b) => a.level_number - b.level_number);
+
+  if (sorted.length !== RANK_ORDER.length) {
+    throw new RankLadderError(
+      `Expected ${RANK_ORDER.length} levels, got ${sorted.length}.`
+    );
+  }
+
+  return sorted.map((row, index) => {
+    const expected = RANK_ORDER[index];
+    if (row.name !== expected) {
+      throw new RankLadderError(
+        `Level ${row.level_number} is "${row.name}", expected "${expected}".`
+      );
+    }
+    if (!Number.isInteger(row.required_xp) || row.required_xp < 0) {
+      throw new RankLadderError(`Level ${row.level_number} has an invalid threshold.`);
+    }
+    if (index === 0 && row.required_xp !== 0) {
+      throw new RankLadderError("The entry level must require 0 XP.");
+    }
+    if (index > 0 && row.required_xp <= sorted[index - 1].required_xp) {
+      throw new RankLadderError(
+        `Level ${row.level_number} must require more XP than level ${sorted[index - 1].level_number}.`
+      );
+    }
+    return { level: row.level_number, rank: expected, minXP: row.required_xp };
+  });
+}
 
 /**
  * Site path of a rank's badge. Returns null for an unknown rank, and the badge
  * falls back to a monogram.
  */
 export function getRankIconUrl(rank: UserRank): string | null {
-  const tier = RANK_THRESHOLDS.find((t) => t.rank === rank);
-  return tier ? `${RANK_ICON_PATH}/${tier.icon}` : null;
+  const icon = RANK_ICONS[rank];
+  return icon ? `${RANK_ICON_PATH}/${icon}` : null;
 }
 
 /** 1-based position of a rank on the ladder (Aficionado 1 … Maestro 5). */
 export function getRankLevel(rank: UserRank): number {
-  return RANK_THRESHOLDS.findIndex((t) => t.rank === rank) + 1;
+  return RANK_ORDER.indexOf(rank) + 1;
+}
+
+/** The tier with this `level_number`, or undefined. */
+export function getTierByLevel(
+  ladder: RankLadder,
+  level: number
+): RankTier | undefined {
+  return ladder.find((tier) => tier.level === level);
 }
 
 /** Full breakdown of where a given XP total sits in the ladder. */
@@ -85,31 +165,24 @@ function safeXP(xp: number): number {
   return Number.isFinite(xp) && xp > 0 ? Math.floor(xp) : 0;
 }
 
-/** Resolve the rank a given XP total currently sits in. */
-export function getRankFromXP(xp: number): UserRank {
+/** Index of the tier a given XP total sits in (the highest one it clears). */
+function tierIndex(xp: number, ladder: RankLadder): number {
   const value = safeXP(xp);
-  // Walk from the top down: first threshold the XP clears wins.
-  for (let i = RANK_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (value >= RANK_THRESHOLDS[i].minXP) return RANK_THRESHOLDS[i].rank;
+  let index = 0;
+  for (let i = 0; i < ladder.length; i++) {
+    if (value >= ladder[i].minXP) index = i;
   }
-  return RANK_THRESHOLDS[0].rank;
+  return index;
+}
+
+/** Resolve the rank a given XP total currently sits in. */
+export function getRankFromXP(xp: number, ladder: RankLadder): UserRank {
+  return ladder[tierIndex(xp, ladder)].rank;
 }
 
 /** The rank above the current one, or `null` if already at the top. */
-export function getNextRank(xp: number): UserRank | null {
-  const value = safeXP(xp);
-  const next = RANK_THRESHOLDS.find((t) => t.minXP > value);
-  return next?.rank ?? null;
-}
-
-/** Index of the current rank in {@link RANK_THRESHOLDS}. */
-function currentRankIndex(xp: number): number {
-  const value = safeXP(xp);
-  let index = 0;
-  for (let i = 0; i < RANK_THRESHOLDS.length; i++) {
-    if (value >= RANK_THRESHOLDS[i].minXP) index = i;
-  }
-  return index;
+export function getNextRank(xp: number, ladder: RankLadder): UserRank | null {
+  return ladder[tierIndex(xp, ladder) + 1]?.rank ?? null;
 }
 
 /**
@@ -118,11 +191,11 @@ function currentRankIndex(xp: number): number {
  * At the top rank: `nextRank`/`nextRankXP` are null, `xpRemaining` is 0, and
  * `progressPercent` is 100 (full bar / "Maximum Rank Reached").
  */
-export function getRankInfo(xp: number): RankInfo {
+export function getRankInfo(xp: number, ladder: RankLadder): RankInfo {
   const currentXP = safeXP(xp);
-  const index = currentRankIndex(currentXP);
-  const current = RANK_THRESHOLDS[index];
-  const next = RANK_THRESHOLDS[index + 1] ?? null;
+  const index = tierIndex(currentXP, ladder);
+  const current = ladder[index];
+  const next = ladder[index + 1] ?? null;
 
   if (!next) {
     return {
@@ -176,9 +249,12 @@ export interface ProfileXpData extends RankInfo {
 }
 
 /** Build {@link ProfileXpData} from a profile's stored XP balance. */
-export function getProfileXpData(experiencePoints: number): ProfileXpData {
+export function getProfileXpData(
+  experiencePoints: number,
+  ladder: RankLadder
+): ProfileXpData {
   return {
     experiencePoints: safeXP(experiencePoints),
-    ...getRankInfo(experiencePoints),
+    ...getRankInfo(experiencePoints, ladder),
   };
 }

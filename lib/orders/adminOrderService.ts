@@ -7,6 +7,7 @@ import {
   type AdminOrderInputValidated,
 } from "@/schemas/adminOrder";
 import type { NotifyResult } from "@/lib/notifications/orderNotifier";
+import { isAdminFreeLocalDelivery } from "./adminShipping";
 
 /**
  * The manual-order use case: an admin takes an order over WhatsApp/phone and the
@@ -44,22 +45,39 @@ export type CustomerNotification =
   | { attempted: false; reason: "no customer email" }
   | ({ attempted: true } & NotifyResult);
 
+/**
+ * Things the admin asked for that the database did not do. Only possible when
+ * the code is deployed ahead of migration 20261110000100 (the old RPC ignores
+ * the fields it does not know). The order exists either way, so this never
+ * flips `ok` — it makes sure the admin is told instead of finding out later.
+ */
+export interface AdminOrderDrift {
+  couponIgnored: boolean;
+  localDeliveryIgnored: boolean;
+}
+
 export type CreateAdminOrderOutcome =
   | {
       ok: true;
       data: AdminOrderResult;
       /** Never affects `ok` — a failed email leaves a created order created. */
       notification: CustomerNotification;
+      drift: AdminOrderDrift;
     }
   | { ok: false; kind: "validation"; message: string }
   | { ok: false; kind: "rpc"; error: PostgrestError };
 
 /**
- * Validate → place → (maybe) confirm.
+ * Validate → decide free shipping → place → (maybe) confirm.
  *
  * Validation is re-run here even though the form already validated: a Server
  * Action is a public HTTP endpoint in disguise, and the district/cantón
  * coherence check is precisely the kind of rule a hand-built payload would skip.
+ *
+ * Free Cariari delivery is decided HERE, from the validated address, with the
+ * same function the form uses to show it — the browser never sends the flag
+ * (the schema would strip it anyway). The coupon is only forwarded: the RPC
+ * spends it in the same transaction that creates the order.
  */
 export async function createAdminOrder(
   deps: AdminOrderDeps,
@@ -71,8 +89,17 @@ export async function createAdminOrder(
   }
   const input: AdminOrderInputValidated = parsed.data;
 
+  const freeLocalDelivery = isAdminFreeLocalDelivery(
+    input.shipping_method,
+    input.shipping
+  );
+  const payload = {
+    ...input,
+    shipping: { ...input.shipping, free_local_delivery: freeLocalDelivery },
+  };
+
   const { data, error } = await deps.supabase.rpc("place_admin_order", {
-    p_payload: input as unknown as Json,
+    p_payload: payload as unknown as Json,
   });
 
   if (error) {
@@ -80,11 +107,25 @@ export async function createAdminOrder(
   }
 
   const result = data as unknown as AdminOrderResult;
+  const drift: AdminOrderDrift = {
+    couponIgnored:
+      Boolean(input.user_coupon_id) &&
+      result.user_coupon_id !== input.user_coupon_id,
+    localDeliveryIgnored: freeLocalDelivery && Number(result.shipping_cost) !== 0,
+  };
+  if (drift.couponIgnored || drift.localDeliveryIgnored) {
+    // Context only — never the customer's details.
+    console.error("[admin/orders] place_admin_order ignored a requested field", {
+      orderId: result.order_id,
+      ...drift,
+    });
+  }
 
   return {
     ok: true,
     data: result,
     notification: await confirmToCustomer(deps, result.order_id, input),
+    drift,
   };
 }
 

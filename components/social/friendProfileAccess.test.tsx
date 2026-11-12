@@ -54,6 +54,8 @@ vi.mock("next/image", () => ({
 }));
 
 import FriendProfileView from "./FriendProfileView";
+import RankLadderProvider from "@/components/rank/RankLadderProvider";
+import { TEST_LADDER } from "@/test/helpers/rankLadder";
 
 const profile = (id: string, username: string, isPublic = true) => ({
   id,
@@ -84,7 +86,9 @@ function renderProfile(userId = AURORA) {
     },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <RankLadderProvider ladder={TEST_LADDER}>{children}</RankLadderProvider>
+    </QueryClientProvider>
   );
   const utils = render(<FriendProfileView userId={userId} />, { wrapper });
   return { ...utils, client };

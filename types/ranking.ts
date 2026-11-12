@@ -1,4 +1,4 @@
-import type { UserRank } from "@/lib/rank";
+import type { RankInfo, UserRank } from "@/lib/rank";
 
 /** How many entries the public leaderboard shows. */
 export const RANKING_TOP_COUNT = 10;
@@ -16,8 +16,10 @@ export interface RankingEntry {
   position: number;
   username: string;
   experiencePoints: number;
-  /** Derived from `experiencePoints` via lib/rank.ts — never stored. */
+  /** Derived from `experiencePoints` and the configured ladder — never stored. */
   rank: UserRank;
+  /** Progress toward the next rank, against the same ladder. */
+  progress: RankInfo;
   /**
    * Places gained (+) or lost (−) since the previous day, `0` for unchanged.
    * Absent until the database keeps a daily snapshot to compare against — the

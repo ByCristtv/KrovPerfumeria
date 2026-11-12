@@ -1,51 +1,79 @@
-import { Gift } from "lucide-react";
+import type { Metadata } from "next";
+import { AlertTriangle } from "lucide-react";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
-import { adminSerif } from "@/components/admin/ui/styles";
+import TierThresholdsEditor from "@/components/admin/rewards/TierThresholdsEditor";
+import CouponRewardsManager from "@/components/admin/rewards/CouponRewardsManager";
+import { getRewardsAdminData } from "@/features/admin/getRewardsAdminData";
+import { MISSING_MIGRATION_MESSAGE } from "@/lib/loyalty/errors";
+
+export const metadata: Metadata = {
+  title: "Recompensas — Admin",
+};
+
+// Always the stored configuration, never a cached copy: an admin edits here.
+export const dynamic = "force-dynamic";
 
 /**
- * Admin → Recompensas.
+ * Admin → Recompensas: the XP each rank requires and the coupons each rank
+ * hands out.
  *
- * Placeholder page for the future rewards system (benefits tied to customer
- * ranks). Authorization is enforced in `proxy.ts`, which redirects any non-admin
- * request away from `/admin/*` before this Server Component runs.
+ * Authorization: proxy.ts redirects non-admins away from /admin/*; the server
+ * actions re-check the role; the RPCs behind them check is_admin() and are the
+ * only write path (migration 20261109000200).
  *
- * Intentionally UI-only: the reward model, eligibility and redemption rules are
- * not defined yet, so this page ships no data access, tables, RPCs or business
- * logic — just the navigation entry and a coming-soon state so the section can
- * be filled in once the requirements exist.
+ * Source of truth: `public.levels` (thresholds) and `public.coupons` (reward
+ * definitions). Nothing on this page is hard-coded — the ranks, their order and
+ * every number are read from the database.
  */
-export default function AdminRewardsPage() {
+export default async function AdminRewardsPage() {
+  const data = await getRewardsAdminData();
+
   return (
     <AdminContainer width="narrow">
       <AdminPageHeader
         eyebrow="Fidelidad"
         title="Recompensas"
-        description="Configura los beneficios asociados a cada rango de cliente."
+        description="Define cuánta experiencia requiere cada rango y qué cupones entrega al alcanzarlo."
       />
 
-      <div className="flex flex-col items-center rounded-none border border-krov-smoke bg-krov-graphite px-6 py-16 text-center shadow-[0_18px_64px_rgba(0,0,0,0.35)]">
-        <span className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-none border border-krov-smoke bg-krov-blood/[0.06] text-krov-rose">
-          <Gift size={30} strokeWidth={1.5} aria-hidden />
-        </span>
-
-        <span className="mb-3 inline-flex items-center rounded-full border border-krov-blood/30 bg-krov-blood/[0.06] px-3.5 py-1.5 text-[10px] uppercase tracking-[0.35em] text-krov-rose">
-          Próximamente
-        </span>
-
-        <h2
-          className="text-2xl text-krov-bone sm:text-3xl"
-          style={{ fontFamily: adminSerif }}
+      {data.status === "error" ? (
+        <div
+          role="alert"
+          className="rounded-none border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200"
         >
-          En desarrollo
-        </h2>
+          {data.message} Recarga la página o revisa la conexión con Supabase.
+        </div>
+      ) : (
+        <div className="space-y-10">
+          {!data.migrationsApplied && (
+            <div
+              role="status"
+              className="flex items-start gap-3 rounded-none border border-amber-400/40 bg-amber-400/10 px-5 py-4 text-sm text-amber-100"
+            >
+              <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />
+              <p>
+                {MISSING_MIGRATION_MESSAGE} Mientras tanto ves la configuración actual en modo de
+                solo lectura.
+              </p>
+            </div>
+          )}
 
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-krov-ash">
-          Esta función se encuentra actualmente en desarrollo. Pronto podrás
-          configurar recompensas para los distintos rangos y niveles de tus
-          clientes desde este panel.
-        </p>
-      </div>
+          {/* key: remount with the stored values after every successful save. */}
+          <TierThresholdsEditor
+            key={data.levelsUpdatedAt ?? "initial"}
+            ladder={data.ladder}
+            levelsUpdatedAt={data.levelsUpdatedAt}
+            readOnly={!data.migrationsApplied}
+          />
+
+          <CouponRewardsManager
+            ladder={data.ladder}
+            rewards={data.rewards}
+            readOnly={!data.migrationsApplied}
+          />
+        </div>
+      )}
     </AdminContainer>
   );
 }

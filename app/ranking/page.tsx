@@ -6,6 +6,7 @@ import RankingBoard, {
   RankingErrorState,
 } from "@/components/ranking/RankingBoard";
 import RewardsRoadmapSection from "@/components/ranking/RewardsRoadmapSection";
+import { getRewardsProgram } from "@/features/loyalty/getRewardsProgram";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { RANKING_TOP_COUNT } from "@/types/ranking";
 
@@ -25,7 +26,7 @@ export const metadata: Metadata = buildPageMetadata({
 export const revalidate = 60;
 
 export default async function RankingPage() {
-  const result = await getTopRanking();
+  const [result, rewards] = await Promise.all([getTopRanking(), getRewardsProgram()]);
 
   return (
     <div className="relative min-h-screen bg-krov-void">
@@ -62,7 +63,13 @@ export default async function RankingPage() {
           which reads better after seeing the climb than before it.
         */}
         <div className="mt-16 border-t border-krov-smoke/70 pt-14 sm:mt-20 sm:pt-16">
-          <RewardsRoadmapSection />
+          {rewards.status === "ok" ? (
+            <RewardsRoadmapSection program={rewards.program} />
+          ) : (
+            <p className="text-center text-sm text-krov-ash">
+              No pudimos cargar la ruta de recompensas. Intenta de nuevo en unos minutos.
+            </p>
+          )}
         </div>
 
         <p className="mt-8 text-center text-xs leading-relaxed text-krov-dust">

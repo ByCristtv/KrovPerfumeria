@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import RankBadge from "./RankBadge";
-import { RANK_THRESHOLDS, getRankIconUrl, getRankLevel } from "@/lib/rank";
+import { RANK_ORDER, getRankIconUrl, getRankLevel } from "@/lib/rank";
 
 describe("rank icon config", () => {
   it("maps every tier to its badge file", () => {
-    expect(RANK_THRESHOLDS.map((t) => [t.rank, t.icon])).toEqual([
-      ["Aficionado", "Aficionado.avif"],
-      ["Coleccionista", "Coleccionista.avif"],
-      ["Conocedor", "Conocedor.avif"],
-      ["Alquimista", "Alquimista.avif"],
-      ["Maestro", "Krov.avif"],
+    expect(RANK_ORDER.map((rank) => [rank, getRankIconUrl(rank)])).toEqual([
+      ["Aficionado", "/ranks/Aficionado.avif"],
+      ["Coleccionista", "/ranks/Coleccionista.avif"],
+      ["Conocedor", "/ranks/Conocedor.avif"],
+      ["Alquimista", "/ranks/Alquimista.avif"],
+      ["Maestro", "/ranks/Krov.avif"],
     ]);
   });
 

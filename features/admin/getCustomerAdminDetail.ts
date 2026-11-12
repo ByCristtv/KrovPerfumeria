@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProfileXpData, type ProfileXpData } from "@/lib/rank";
+import { getRankLadder } from "@/features/loyalty/rankLadder";
 import type { AdminOrderRow } from "@/features/admin/getOrdersAdminPage";
 import type { Database } from "@/types/database";
 
@@ -101,7 +102,7 @@ export async function getCustomerAdminDetail(
 ): Promise<CustomerAdminDetail | null> {
   const supabase = await createClient();
 
-  const [profileRes, ordersRes, adjustmentsRes] = await Promise.all([
+  const [profileRes, ordersRes, adjustmentsRes, ladder] = await Promise.all([
     supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle(),
     supabase
       .from("orders")
@@ -115,6 +116,7 @@ export async function getCustomerAdminDetail(
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(CUSTOMER_ADJUSTMENTS_LIMIT),
+    getRankLadder(),
   ]);
 
   if (profileRes.error) {
@@ -138,7 +140,7 @@ export async function getCustomerAdminDetail(
 
   return {
     profile,
-    xp: getProfileXpData(profile.experience_points),
+    xp: getProfileXpData(profile.experience_points, ladder),
     orders,
     ordersTotal: ordersRes.error ? 0 : (ordersRes.count ?? orders.length),
     ordersLoaded: !ordersRes.error,

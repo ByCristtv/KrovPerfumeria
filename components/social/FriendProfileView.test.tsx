@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import type { FriendProfile, PurchasedFragrance } from "@/types/social";
 
 const { useProfileMock, usePurchasesMock, replaceMock } = vi.hoisted(() => ({
@@ -30,6 +30,7 @@ vi.mock("next/image", () => ({
 }));
 
 import FriendProfileView from "./FriendProfileView";
+import { renderWithLadder } from "@/test/helpers/rankLadder";
 
 const profile = (over: Partial<FriendProfile> = {}): FriendProfile => ({
   userId: "u2",
@@ -75,7 +76,7 @@ function setup(
     isError: purchaseState.isError ?? false,
     refetch: vi.fn(),
   });
-  return render(<FriendProfileView userId="u2" />);
+  return renderWithLadder(<FriendProfileView userId="u2" />);
 }
 
 /** SOCIAL-11 + SOCIAL-12. */

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Friend } from "@/types/social";
 
@@ -28,6 +28,7 @@ vi.mock("next/image", () => ({
 }));
 
 import FriendsList from "./FriendsList";
+import { renderWithLadder } from "@/test/helpers/rankLadder";
 
 const friend = (over: Partial<Friend> = {}): Friend => ({
   friendshipId: "f1",
@@ -61,7 +62,7 @@ function setup(
     mutate: removeMutate,
     isPending: removeState.isPending ?? false,
   });
-  return render(<FriendsList onGoToSearch={onGoToSearch} />);
+  return renderWithLadder(<FriendsList onGoToSearch={onGoToSearch} />);
 }
 
 const menuButton = (name: RegExp) =>

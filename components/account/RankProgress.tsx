@@ -1,4 +1,7 @@
+"use client";
+
 import { getRankInfo } from "@/lib/rank";
+import { useRankLadder } from "@/components/rank/RankLadderProvider";
 import { formatXp } from "@/lib/format";
 import RankBadge from "@/components/rank/RankBadge";
 
@@ -17,12 +20,24 @@ const serif = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
  * CURRENT rank (full at the top rank), all derived by {@link getRankInfo}, so
  * ranks are never stored, only computed from `experience_points`.
  *
- * No client JS: the fill animates with CSS `scaleX` (`.krov-bar-fill`), which
- * stays on the compositor. It previously animated `width` through Framer
- * Motion, a layout property recalculated on every frame.
+ * The thresholds are the ladder configured in `public.levels` (via
+ * `useRankLadder`); if it could not be loaded, only the XP total is shown.
+ *
+ * The fill animates with CSS `scaleX` (`.krov-bar-fill`), which stays on the
+ * compositor. It previously animated `width` through Framer Motion, a layout
+ * property recalculated on every frame.
  */
 export default function RankProgress({ experiencePoints }: RankProgressProps) {
-  const info = getRankInfo(experiencePoints);
+  const ladder = useRankLadder();
+  if (!ladder) {
+    return (
+      <p className="text-sm tabular-nums text-white">
+        {formatXp(experiencePoints)}
+        <span className="ml-1 text-[10px] uppercase tracking-[0.18em] text-white/45">XP</span>
+      </p>
+    );
+  }
+  const info = getRankInfo(experiencePoints, ladder);
   const percent = info.nextRank === null ? 100 : info.progressPercent;
 
   return (

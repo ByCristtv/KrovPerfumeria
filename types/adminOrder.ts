@@ -46,8 +46,14 @@ export interface AdminOrderInput {
   shipping: AdminOrderShippingInput;
   items: AdminOrderItemInput[];
   shipping_method: AdminShippingMethod;
-  /** Optional flat discount in CRC. */
+  /** Optional flat discount in CRC. Mutually exclusive with `user_coupon_id`. */
   discount?: number;
+  /**
+   * One of the linked customer's level coupons (a `user_coupons` id). Only an
+   * intent: ownership, status, expiry, the minimum and the amount are decided
+   * by the database when the order is created. Requires `customer.user_id`.
+   */
+  user_coupon_id?: string;
   notes?: string;
 }
 
@@ -56,11 +62,21 @@ export interface AdminOrderResult {
   order_number: number;
   subtotal: number;
   shipping_cost: number;
+  /** Manual discount or coupon discount, whichever the order carries. */
   discount: number;
   total: number;
   item_count: number;
   /** Account the order ended up on (explicit or resolved by email); null = guest. */
   user_id: string | null;
+  /**
+   * The coupon the order spent, or null. Absent (undefined) only when the
+   * database predates migration 20261110000100 — the service checks for that.
+   */
+  user_coupon_id?: string | null;
+  coupon_code?: string | null;
+  coupon_name?: string | null;
+  /** True when the free Cariari delivery set shipping to ₡0. */
+  local_delivery?: boolean;
 }
 
 /** A registered customer as the admin order form sees them. */

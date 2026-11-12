@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { getViewerXp } from "@/features/ranking/getViewerXp";
 import RewardsRoadmap, { RewardsRoadmapSkeleton } from "./RewardsRoadmap";
+import type { RewardsProgram } from "@/features/loyalty/getRewardsProgram";
 
 /**
  * Loads the viewer's XP and hands it to the roadmap.
@@ -21,7 +22,7 @@ import RewardsRoadmap, { RewardsRoadmapSkeleton } from "./RewardsRoadmap";
  *   - signed out → the full ladder with no tier highlighted, plus a sign-in CTA
  *   - signed in  → the ladder with their rank and progress marked
  */
-export default function RewardsRoadmapSection() {
+export default function RewardsRoadmapSection({ program }: { program: RewardsProgram }) {
   const { user, isLoading: authLoading } = useAuthUser();
 
   const xpQuery = useQuery({
@@ -47,7 +48,7 @@ export default function RewardsRoadmapSection() {
 
   return (
     <>
-      <RewardsRoadmap experiencePoints={user ? xpQuery.data ?? 0 : null} />
+      <RewardsRoadmap experiencePoints={user ? xpQuery.data ?? 0 : null} program={program} />
 
       {!user && (
         <p className="mt-6 text-center text-xs leading-relaxed text-krov-dust">

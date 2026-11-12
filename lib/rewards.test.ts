@@ -1,164 +1,128 @@
 import { describe, expect, it } from "vitest";
 import { formatPrice } from "@/lib/format";
-import { RANK_THRESHOLDS, getRankFromXP, type UserRank } from "@/lib/rank";
+import { getRankFromXP, type UserRank } from "@/lib/rank";
 import {
-  RANK_REWARDS,
-  REWARD_MIN_PURCHASE,
+  NO_REWARD_DESCRIPTION,
   buildRewardsRoadmap,
   describeReward,
-  getRewardForRank,
-  summarizeReward,
+  summarizeRewards,
 } from "@/lib/rewards";
+import { groupRewardsByLevel } from "@/lib/loyalty/types";
+import { TEST_LADDER, ladderWith } from "@/test/helpers/rankLadder";
+import { reward, seedRewards } from "@/test/helpers/rewardsFixtures";
 
-/** The terms as specified, kept here as an independent restatement. */
-const SPEC: Array<{
-  rank: UserRank;
-  min: number;
-  max: number | null;
-  percent: number | null;
-}> = [
-  { rank: "Aficionado", min: 0, max: 999, percent: null },
-  { rank: "Coleccionista", min: 1_000, max: 4_999, percent: 5 },
-  { rank: "Conocedor", min: 5_000, max: 9_999, percent: 8 },
-  { rank: "Alquimista", min: 10_000, max: 17_999, percent: 12 },
-  { rank: "Maestro", min: 18_000, max: null, percent: 18 },
+/**
+ * The roadmap is a pure function of (XP, ladder, rewards) — all three come from
+ * the database. These tests feed it the seeded configuration and edited ones,
+ * and check it never invents a number of its own.
+ */
+const SEEDED = groupRewardsByLevel(seedRewards());
+
+const SPEC: Array<{ rank: UserRank; min: number; max: number | null }> = [
+  { rank: "Aficionado", min: 0, max: 999 },
+  { rank: "Coleccionista", min: 1_000, max: 4_999 },
+  { rank: "Conocedor", min: 5_000, max: 9_999 },
+  { rank: "Alquimista", min: 10_000, max: 17_999 },
+  { rank: "Maestro", min: 18_000, max: null },
 ];
 
-describe("RANK_REWARDS", () => {
-  it("covers every rank on the ladder, with no extras", () => {
-    expect(Object.keys(RANK_REWARDS).sort()).toEqual(
-      RANK_THRESHOLDS.map((t) => t.rank).sort()
+describe("summarizeRewards", () => {
+  it("says so when a rank hands out nothing", () => {
+    expect(summarizeRewards([])).toBe("Sin recompensa");
+  });
+
+  it("states a single reward's benefit", () => {
+    expect(summarizeRewards([reward(3, 8)])).toBe("8% de descuento");
+    expect(summarizeRewards([reward(3, 5_000, { discountType: "fixed" })])).toBe(
+      `${formatPrice(5_000)} de descuento`
     );
   });
 
-  it("gives Aficionado no reward", () => {
-    expect(getRewardForRank("Aficionado").kind).toBe("none");
+  it("lists every percentage of a rank with several rewards", () => {
+    expect(summarizeRewards([reward(4, 10), reward(4, 15), reward(4, 20)])).toBe(
+      "Cupones de 10%, 15% y 20% de descuento"
+    );
+    expect(summarizeRewards([reward(4, 10), reward(4, 15)])).toBe("Cupones de 10% y 15% de descuento");
   });
 
-  it.each(SPEC.filter((s) => s.percent !== null))(
-    "gives $rank a $percent% discount gated at the minimum purchase",
-    ({ rank, percent }) => {
-      const reward = getRewardForRank(rank);
-      expect(reward.kind).toBe("discount");
-      expect(reward.discountPercent).toBe(percent);
-      expect(reward.minPurchase).toBe(REWARD_MIN_PURCHASE);
-    }
-  );
-
-  it("gives Maestro the same kind of reward as every other paid tier — a discount, no longer a free fragrance", () => {
-    const reward = getRewardForRank("Maestro");
-    expect(reward.kind).toBe("discount");
-    expect(reward.discountPercent).toBe(18);
-  });
-
-  it("uses 20.000 CRC as the discount floor", () => {
-    expect(REWARD_MIN_PURCHASE).toBe(20_000);
+  it("counts mixed reward types instead of mixing units in one phrase", () => {
+    expect(summarizeRewards([reward(4, 10), reward(4, 5_000, { discountType: "fixed" })])).toBe(
+      "2 cupones de descuento"
+    );
   });
 });
 
-describe("reward copy", () => {
-  /**
-   * Asserted through formatPrice rather than a literal "₡20.000": the es-CR
-   * group separator is whatever the running ICU says it is (a narrow no-break
-   * space on current Node/Chrome), and pinning it here would make the suite
-   * fail on an ICU upgrade without anything being wrong.
-   */
-  const MIN_PURCHASE_TEXT = formatPrice(20_000);
-
-  it("summarizes a discount as a percentage", () => {
-    expect(summarizeReward(getRewardForRank("Conocedor"))).toBe("8% de descuento");
+describe("describeReward", () => {
+  it("derives every number from the definition", () => {
+    const text = describeReward(reward(4, 12, { minOrderSubtotal: 25_000 }));
+    expect(text).toContain("12% de descuento");
+    expect(text).toContain(formatPrice(25_000));
+    expect(text).toMatch(/un solo uso/);
   });
 
-  it("summarizes the top reward as an 18% discount", () => {
-    expect(summarizeReward(getRewardForRank("Maestro"))).toBe(
-      "18% de descuento"
-    );
+  it("mentions a cap and an expiry only when configured", () => {
+    const plain = describeReward(reward(4, 12));
+    expect(plain).not.toMatch(/máximo|Vence/);
+
+    const full = describeReward(reward(4, 12, { maxDiscountAmount: 30_000, validDays: 1 }));
+    expect(full).toContain(`Descuento máximo de ${formatPrice(30_000)}`);
+    expect(full).toContain("Vence 1 día después");
   });
 
-  it("states the discount percentage and the minimum purchase together", () => {
-    const text = describeReward(getRewardForRank("Alquimista"));
-    expect(text).toContain("12%");
-    expect(text).toContain(MIN_PURCHASE_TEXT);
+  it("says there is no minimum when the minimum is 0", () => {
+    expect(describeReward(reward(2, 5, { minOrderSubtotal: 0 }))).toMatch(/sin compra mínima/);
   });
 
-  it("states the top reward's percentage and minimum purchase", () => {
-    const text = describeReward(getRewardForRank("Maestro"));
-    expect(text).toContain("18%");
-    expect(text).toContain(MIN_PURCHASE_TEXT);
-    expect(text).not.toMatch(/fragancia/i);
-  });
-
-  it("says each discount is a single-use coupon", () => {
-    expect(describeReward(getRewardForRank("Coleccionista"))).toMatch(
-      /un solo uso/i
-    );
-  });
-
-  it("says plainly that the starting tier has no reward", () => {
-    expect(describeReward(getRewardForRank("Aficionado"))).toMatch(
-      /todavía no hay recompensa/i
-    );
+  it("has a starting-point sentence for rewardless ranks", () => {
+    expect(NO_REWARD_DESCRIPTION).toMatch(/punto de partida/);
   });
 });
 
 describe("buildRewardsRoadmap — tier ranges", () => {
-  it("renders the ladder in ascending order", () => {
-    const { steps } = buildRewardsRoadmap(0);
-    expect(steps.map((s) => s.rank)).toEqual(SPEC.map((s) => s.rank));
-  });
-
-  it.each(SPEC)(
-    "spans $rank from $min to $max",
-    ({ rank, min, max }) => {
-      const step = buildRewardsRoadmap(0).steps.find((s) => s.rank === rank)!;
-      expect(step.minXP).toBe(min);
-      expect(step.maxXP).toBe(max);
-    }
-  );
-
-  it("leaves the top tier open-ended", () => {
-    const top = buildRewardsRoadmap(0).steps.at(-1)!;
-    expect(top.rank).toBe("Maestro");
-    expect(top.maxXP).toBeNull();
+  it("lists every tier of the ladder, in order, with its range", () => {
+    const { steps } = buildRewardsRoadmap(0, TEST_LADDER, SEEDED);
+    expect(steps.map((s) => ({ rank: s.rank, min: s.minXP, max: s.maxXP }))).toEqual(SPEC);
   });
 
   it("produces ranges that agree with getRankFromXP at every boundary", () => {
-    // The bug this guards: a displayed range drifting from the rank the same XP
-    // actually resolves to.
-    for (const step of buildRewardsRoadmap(0).steps) {
-      expect(getRankFromXP(step.minXP)).toBe(step.rank);
+    for (const step of buildRewardsRoadmap(0, TEST_LADDER, SEEDED).steps) {
+      expect(getRankFromXP(step.minXP, TEST_LADDER)).toBe(step.rank);
       if (step.maxXP !== null) {
-        expect(getRankFromXP(step.maxXP)).toBe(step.rank);
-        expect(getRankFromXP(step.maxXP + 1)).not.toBe(step.rank);
+        expect(getRankFromXP(step.maxXP, TEST_LADDER)).toBe(step.rank);
+        expect(getRankFromXP(step.maxXP + 1, TEST_LADDER)).not.toBe(step.rank);
       }
     }
+  });
+
+  it("follows an edited ladder exactly", () => {
+    const ladder = ladderWith([0, 500, 2_000, 9_000, 30_000]);
+    const { steps } = buildRewardsRoadmap(null, ladder, SEEDED);
+    expect(steps.map((s) => [s.minXP, s.maxXP])).toEqual([
+      [0, 499],
+      [500, 1_999],
+      [2_000, 8_999],
+      [9_000, 29_999],
+      [30_000, null],
+    ]);
+  });
+
+  it("attaches each level's rewards to its tier — several, one or none", () => {
+    const rewards = groupRewardsByLevel([reward(4, 10), reward(4, 15), reward(2, 5)]);
+    const { steps } = buildRewardsRoadmap(null, TEST_LADDER, rewards);
+    expect(steps.map((s) => s.rewards.map((r) => r.discountValue))).toEqual([[], [5], [], [10, 15], []]);
   });
 });
 
 describe("buildRewardsRoadmap — viewer status", () => {
   const statusesAt = (xp: number) =>
-    Object.fromEntries(
-      buildRewardsRoadmap(xp).steps.map((s) => [s.rank, s.status])
-    );
+    Object.fromEntries(buildRewardsRoadmap(xp, TEST_LADDER, SEEDED).steps.map((s) => [s.rank, s.status]));
 
-  it("marks exactly one tier as current for any XP total", () => {
-    for (const xp of [0, 999, 1_000, 4_999, 5_000, 9_999, 10_000, 17_999, 18_000, 90_000]) {
-      const current = buildRewardsRoadmap(xp).steps.filter(
-        (s) => s.status === "current"
-      );
+  it("has exactly one current tier, the one the XP resolves to", () => {
+    for (const xp of [0, 999, 1_000, 4_999, 5_000, 17_999, 18_000, 60_000]) {
+      const current = buildRewardsRoadmap(xp, TEST_LADDER, SEEDED).steps.filter((s) => s.status === "current");
       expect(current).toHaveLength(1);
-      expect(current[0].rank).toBe(getRankFromXP(xp));
+      expect(current[0].rank).toBe(getRankFromXP(xp, TEST_LADDER));
     }
-  });
-
-  it("marks a brand-new customer as current at Aficionado and locks everything above", () => {
-    expect(statusesAt(0)).toEqual({
-      Aficionado: "current",
-      Coleccionista: "locked",
-      Conocedor: "locked",
-      Alquimista: "locked",
-      Maestro: "locked",
-    });
   });
 
   it("marks passed tiers unlocked and future tiers locked mid-ladder", () => {
@@ -171,56 +135,36 @@ describe("buildRewardsRoadmap — viewer status", () => {
     });
   });
 
-  it("unlocks the whole ladder at the top rank", () => {
-    expect(statusesAt(25_000)).toEqual({
-      Aficionado: "unlocked",
-      Coleccionista: "unlocked",
-      Conocedor: "unlocked",
-      Alquimista: "unlocked",
-      Maestro: "current",
-    });
-  });
-
   it("promotes exactly at a threshold, not one XP early", () => {
     expect(statusesAt(999).Coleccionista).toBe("locked");
     expect(statusesAt(1_000).Coleccionista).toBe("current");
   });
 
-  it("reports every tier as unknown for a signed-out visitor", () => {
-    const roadmap = buildRewardsRoadmap(null);
+  it("reports every tier as unknown for a signed-out visitor, but lists them all", () => {
+    const roadmap = buildRewardsRoadmap(null, TEST_LADDER, SEEDED);
     expect(roadmap.viewer).toBeNull();
+    expect(roadmap.steps).toHaveLength(SPEC.length);
     expect(roadmap.steps.every((s) => s.status === "unknown")).toBe(true);
-  });
-
-  it("still lists the full ladder for a signed-out visitor", () => {
-    expect(buildRewardsRoadmap(null).steps).toHaveLength(SPEC.length);
   });
 });
 
 describe("buildRewardsRoadmap — viewer progress", () => {
-  it("exposes the reward held now and the one being worked toward", () => {
-    const { viewer } = buildRewardsRoadmap(6_000);
+  it("names the current and the next rank's rewards", () => {
+    const { viewer } = buildRewardsRoadmap(6_000, TEST_LADDER, SEEDED);
     expect(viewer?.currentRank).toBe("Conocedor");
-    expect(viewer?.currentReward.discountPercent).toBe(8);
-    expect(viewer?.nextRank).toBe("Alquimista");
-    expect(viewer?.nextReward?.discountPercent).toBe(12);
+    expect(viewer?.currentRewards.map((r) => r.discountValue)).toEqual([8]);
+    expect(viewer?.nextRewards?.map((r) => r.discountValue)).toEqual([12]);
+    expect(viewer?.xpRemaining).toBe(4_000);
   });
 
-  it("reports the XP still needed for the next reward", () => {
-    const { viewer } = buildRewardsRoadmap(4_000);
-    expect(viewer?.xpRemaining).toBe(1_000);
-    expect(viewer?.nextRank).toBe("Conocedor");
-  });
-
-  it("has no next reward at the top rank", () => {
-    const { viewer } = buildRewardsRoadmap(20_000);
+  it("has no next rewards at the top", () => {
+    const { viewer } = buildRewardsRoadmap(20_000, TEST_LADDER, SEEDED);
     expect(viewer?.nextRank).toBeNull();
-    expect(viewer?.nextReward).toBeNull();
-    expect(viewer?.progressPercent).toBe(100);
+    expect(viewer?.nextRewards).toBeNull();
   });
 
-  it("clamps nonsense XP to the starting tier instead of throwing", () => {
-    expect(buildRewardsRoadmap(-500).viewer?.currentRank).toBe("Aficionado");
-    expect(buildRewardsRoadmap(Number.NaN).viewer?.currentRank).toBe("Aficionado");
+  it("clamps nonsense XP to the entry rank", () => {
+    expect(buildRewardsRoadmap(-500, TEST_LADDER, SEEDED).viewer?.currentRank).toBe("Aficionado");
+    expect(buildRewardsRoadmap(Number.NaN, TEST_LADDER, SEEDED).viewer?.currentRank).toBe("Aficionado");
   });
 });

@@ -4,13 +4,15 @@ import { useState } from "react";
 import { formatXp } from "@/lib/format";
 import type { UserRank } from "@/lib/rank";
 import {
+  NO_REWARD_DESCRIPTION,
   buildRewardsRoadmap,
   describeReward,
-  summarizeReward,
+  summarizeRewards,
   type RewardRoadmapStep,
   type RewardsRoadmapViewer,
   type RoadmapStepStatus,
 } from "@/lib/rewards";
+import type { RewardsProgram } from "@/features/loyalty/getRewardsProgram";
 import { TextBone } from "@/components/ui/Skeleton";
 import RankBadge from "@/components/rank/RankBadge";
 
@@ -21,15 +23,17 @@ interface RewardsRoadmapProps {
    * sees every tier and its reward — just none of them highlighted.
    */
   experiencePoints: number | null;
+  /** The configured ladder and active rewards (public.levels + public.coupons). */
+  program: RewardsProgram;
 }
 
 /**
  * The rewards progression timeline on /ranking.
  *
- * Presentation only. Every threshold, range and reward term comes from
- * `buildRewardsRoadmap` (lib/rewards.ts → lib/rank.ts), so this file contains no
- * XP number and no discount percentage — changing the ladder never means editing
- * a component.
+ * Presentation only. Every threshold, range and reward term comes from the
+ * database (via `program`) through `buildRewardsRoadmap`, so this file contains
+ * no XP number and no discount percentage — an admin changing the ladder or the
+ * rewards in /admin/rewards never means editing a component.
  *
  * Layout is mobile-first and changes ORIENTATION rather than content: a vertical
  * stepper on a phone (where five tiers side by side would be unreadable) that
@@ -44,8 +48,13 @@ interface RewardsRoadmapProps {
  */
 export default function RewardsRoadmap({
   experiencePoints,
+  program,
 }: RewardsRoadmapProps) {
-  const { steps, viewer } = buildRewardsRoadmap(experiencePoints);
+  const { steps, viewer } = buildRewardsRoadmap(
+    experiencePoints,
+    program.ladder,
+    program.rewardsByLevel
+  );
 
   const [selectedRank, setSelectedRank] = useState<UserRank>(() =>
     initialSelection(steps, viewer)
@@ -107,9 +116,15 @@ export default function RewardsRoadmap({
             {selected.rank}
           </h3>
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-krov-ash">
-          {describeReward(selected.reward)}
-        </p>
+        {selected.rewards.length === 0 ? (
+          <p className="mt-3 text-sm leading-relaxed text-krov-ash">{NO_REWARD_DESCRIPTION}</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-krov-ash">
+            {selected.rewards.map((reward) => (
+              <li key={reward.id}>{describeReward(reward)}</li>
+            ))}
+          </ul>
+        )}
         {selected.status === "locked" && viewer && (
           <p className="mt-3 text-xs leading-relaxed text-krov-dust">
             Te faltan{" "}
@@ -189,7 +204,7 @@ function TimelineStep({
             {rangeLabel(step)} XP
           </span>
           <span className="mt-2 block text-xs leading-relaxed text-krov-ash">
-            {summarizeReward(step.reward)}
+            {summarizeRewards(step.rewards)}
           </span>
           {tone.badge && (
             <span
@@ -250,8 +265,14 @@ function ViewerProgress({ viewer }: { viewer: RewardsRoadmapViewer }) {
       <p className="mt-3 text-xs leading-relaxed text-krov-ash">
         {atTop ? (
           <>
-            Alcanzaste el rango máximo.{" "}
-            {summarizeReward(viewer.currentReward)} te espera.
+            Alcanzaste el rango máximo.
+            {viewer.currentRewards.length > 0 && (
+              <>
+                {" "}
+                {summarizeRewards(viewer.currentRewards)}{" "}
+                {viewer.currentRewards.length > 1 ? "te esperan" : "te espera"}.
+              </>
+            )}
           </>
         ) : (
           <>
@@ -260,7 +281,10 @@ function ViewerProgress({ viewer }: { viewer: RewardsRoadmapViewer }) {
               {formatXp(viewer.xpRemaining)} XP
             </strong>{" "}
             para {viewer.nextRank}
-            {viewer.nextReward && <> y {summarizeReward(viewer.nextReward)}</>}.
+            {viewer.nextRewards && viewer.nextRewards.length > 0 && (
+              <> y {lowerFirst(summarizeRewards(viewer.nextRewards))}</>
+            )}
+            .
           </>
         )}
       </p>
@@ -311,6 +335,11 @@ const STATUS_TONE: Record<
   },
 };
 
+/** Mid-sentence use of a headline ("Cupones de…" → "cupones de…"). */
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 /** "1,000 – 4,999", or "18,000+" for the open-ended top tier. */
 function rangeLabel(step: RewardRoadmapStep): string {
   if (step.maxXP === null) return `${formatXp(step.minXP)}+`;
@@ -327,7 +356,7 @@ function initialSelection(
   viewer: RewardsRoadmapViewer | null
 ): UserRank {
   if (viewer) return viewer.currentRank;
-  return steps.find((step) => step.reward.kind !== "none")?.rank ?? steps[0].rank;
+  return steps.find((step) => step.rewards.length > 0)?.rank ?? steps[0].rank;
 }
 
 /** The roadmap's static masthead — shared with the skeleton so the two match. */

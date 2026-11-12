@@ -775,6 +775,33 @@ export type Database = {
           },
         ]
       }
+      product_gender_category_backup: {
+        Row: {
+          agreed_with_gender: boolean
+          backed_up_at: string
+          category_id: string
+          category_slug: string
+          product_gender: string | null
+          product_id: string
+        }
+        Insert: {
+          agreed_with_gender: boolean
+          backed_up_at?: string
+          category_id: string
+          category_slug: string
+          product_gender?: string | null
+          product_id: string
+        }
+        Update: {
+          agreed_with_gender?: boolean
+          backed_up_at?: string
+          category_id?: string
+          category_slug?: string
+          product_gender?: string | null
+          product_id?: string
+        }
+        Relationships: []
+      }
       product_images: {
         Row: {
           alt_text: string | null

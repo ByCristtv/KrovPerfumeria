@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Link2 } from "lucide-react";
 import OrdersFilters from "./OrdersFilters";
 import OrdersTable from "./OrdersTable";
-import { STATUS_PARAM, PAYMENT_PARAM } from "./params";
+import {
+  STATUS_PARAM,
+  PAYMENT_PARAM,
+  ORDER_STATUS_FILTERS,
+  PAYMENT_STATUS_FILTERS,
+  coerceFilter,
+} from "./params";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
 import Pagination from "@/components/admin/ui/Pagination";
-import {
-  getOrdersAdminPage,
-  type OrderStatusFilter,
-  type PaymentStatusFilter,
-} from "@/features/admin/getOrdersAdminPage";
+import { getOrdersAdminPage } from "@/features/admin/getOrdersAdminPage";
 import {
   parsePage,
   parseParam,
@@ -25,25 +28,6 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
-
-const ORDER_STATUSES: OrderStatusFilter[] = [
-  "all",
-  "pending",
-  "received",
-  "shipped",
-  "denied",
-];
-const PAYMENT_STATUSES: PaymentStatusFilter[] = [
-  "all",
-  "pending",
-  "paid",
-  "failed",
-  "refunded",
-];
-
-function coerce<T extends string>(value: string, allowed: T[], fallback: T): T {
-  return (allowed as string[]).includes(value) ? (value as T) : fallback;
-}
 
 /**
  * Admin → Orders list. Auth is enforced by proxy.ts before this renders. The list
@@ -60,10 +44,14 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
   const sp = await searchParams;
   const search = parseSearch(sp);
   const page = parsePage(sp);
-  const orderStatus = coerce(parseParam(sp, STATUS_PARAM, "all"), ORDER_STATUSES, "all");
-  const paymentStatus = coerce(
+  const orderStatus = coerceFilter(
+    parseParam(sp, STATUS_PARAM, "all"),
+    ORDER_STATUS_FILTERS,
+    "all"
+  );
+  const paymentStatus = coerceFilter(
     parseParam(sp, PAYMENT_PARAM, "all"),
-    PAYMENT_STATUSES,
+    PAYMENT_STATUS_FILTERS,
     "all"
   );
 
@@ -81,20 +69,29 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         title="Órdenes"
         description="Gestiona los pedidos de tus clientes."
         actions={
-          <Link
-            href="/admin/orders/new"
-            className="inline-flex items-center gap-2 rounded-none bg-krov-blood px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-krov-crimson"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
-            Crear Orden
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/admin/orders/link"
+              className="inline-flex items-center gap-2 rounded-none border border-krov-blood/50 px-4 py-2.5 text-sm font-semibold text-krov-rose transition hover:border-krov-blood hover:bg-krov-blood/10"
+            >
+              <Link2 size={16} strokeWidth={2} aria-hidden />
+              Ligar Pedidos
+            </Link>
+            <Link
+              href="/admin/orders/new"
+              className="inline-flex items-center gap-2 rounded-none bg-krov-blood px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-krov-crimson"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M12 5v14M5 12h14"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Crear Orden
+            </Link>
+          </div>
         }
       />
 

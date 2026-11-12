@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 
 const { actionMock } = vi.hoisted(() => ({ actionMock: vi.fn() }));
 vi.mock("../actions", () => ({ adjustCustomerXpAction: actionMock }));
 
 import XpAdjustmentForm from "./XpAdjustmentForm";
+import { renderWithLadder } from "@/test/helpers/rankLadder";
 
 const UID = "11111111-1111-4111-8111-111111111111";
 
 function setup(currentXp = 500) {
-  render(<XpAdjustmentForm userId={UID} currentXp={currentXp} />);
+  renderWithLadder(<XpAdjustmentForm userId={UID} currentXp={currentXp} />);
   return {
     amount: screen.getByLabelText(/cantidad de xp/i),
     reason: screen.getByLabelText(/motivo/i),

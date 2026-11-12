@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { RANK_THRESHOLDS } from "@/lib/rank";
+import { RANK_ORDER } from "@/lib/rank";
 import { NEUTRAL_RING, RANK_STYLES } from "./rankStyle";
 
 describe("RANK_STYLES", () => {
   it("covers every rank on the ladder, so a new tier cannot render unstyled", () => {
     expect(Object.keys(RANK_STYLES).sort()).toEqual(
-      RANK_THRESHOLDS.map((t) => t.rank).sort()
+      [...RANK_ORDER].sort()
     );
   });
 

@@ -35,6 +35,18 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
+// The ladder is read from public.levels in production; tests pin the seeded one.
+const { ladderMock } = vi.hoisted(() => ({ ladderMock: { current: null as unknown } }));
+vi.mock("@/features/loyalty/rankLadder", async () => {
+  const { TEST_LADDER } = await import("@/test/helpers/rankLadder");
+  ladderMock.current = TEST_LADDER;
+  return {
+    getRankLadder: vi.fn(async () => ladderMock.current),
+    getRankLadderSafe: vi.fn(async () => ladderMock.current),
+    fetchRankLadder: vi.fn(async () => ladderMock.current),
+  };
+});
+
 import { CUSTOMERS_PAGE_SIZE, getCustomersAdminPage } from "./getCustomersAdminPage";
 
 const call = (method: string) => state.calls.find((c) => c.method === method);

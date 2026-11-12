@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RewardsRoadmap from "./RewardsRoadmap";
+import { program, reward } from "@/test/helpers/rewardsFixtures";
+import { ladderWith } from "@/test/helpers/rankLadder";
+import type { RewardsProgram } from "@/features/loyalty/getRewardsProgram";
 
 /**
  * Renders the roadmap for a given XP balance. `null` is the signed-out visitor.
+ * The default programme is the seeded one (0/1000/5000/10000/18000 and
+ * 5/8/12/18 %); every number below comes from that fixture, i.e. from what the
+ * database would return — the component itself holds none.
  */
-const renderRoadmap = (experiencePoints: number | null) =>
-  render(<RewardsRoadmap experiencePoints={experiencePoints} />);
+const renderRoadmap = (experiencePoints: number | null, p: RewardsProgram = program()) =>
+  render(<RewardsRoadmap experiencePoints={experiencePoints} program={p} />);
 
 /** The rail's tier buttons, in ladder order. */
 const tiers = () => screen.getAllByRole("button");
@@ -218,5 +224,48 @@ describe("RewardsRoadmap — selecting a tier", () => {
     await user.keyboard("{Enter}");
 
     expect(detailRank()).toBe("Maestro");
+  });
+});
+
+describe("RewardsRoadmap — configuration from the database", () => {
+  it("follows thresholds an admin changed, with no code change", () => {
+    renderRoadmap(1_500, program(undefined, ladderWith([0, 800, 1_400, 9_000, 20_000])));
+    expect(within(tier("Coleccionista")).getByText("800 – 1,399 XP")).toBeInTheDocument();
+    expect(within(tier("Maestro")).getByText("20,000+ XP")).toBeInTheDocument();
+    // 1,500 XP is Conocedor under the new ladder (it was Coleccionista before).
+    expect(detailRank()).toBe("Conocedor");
+  });
+
+  it("lists every reward of a rank that hands out several", async () => {
+    const user = userEvent.setup();
+    renderRoadmap(
+      0,
+      program([reward(4, 10), reward(4, 15, { maxDiscountAmount: 30_000, validDays: 30 }), reward(4, 20)])
+    );
+
+    expect(within(tier("Alquimista")).getByText("Cupones de 10%, 15% y 20% de descuento")).toBeInTheDocument();
+
+    await user.click(tier("Alquimista"));
+    const items = within(detailPanel()).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[1]).toHaveTextContent("15% de descuento");
+    expect(items[1]).toHaveTextContent(/Descuento máximo de/);
+    expect(items[1]).toHaveTextContent(/Vence 30 días después/);
+  });
+
+  it("says a rank has no reward when none is active", () => {
+    renderRoadmap(null, program([reward(5, 18)]));
+    expect(within(tier("Coleccionista")).getByText("Sin recompensa")).toBeInTheDocument();
+    // Signed-out: opens on the first rank that DOES carry a reward.
+    expect(detailRank()).toBe("Maestro");
+  });
+
+  it("describes a fixed-amount reward in colones", async () => {
+    const user = userEvent.setup();
+    renderRoadmap(0, program([reward(3, 5_000, { discountType: "fixed", minOrderSubtotal: 0 })]));
+    await user.click(tier("Conocedor"));
+    expect(within(detailPanel()).getByText(/5000 de descuento|5 000 de descuento|5\.000 de descuento/)).toHaveTextContent(
+      /sin compra mínima/
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { formatXp } from "@/lib/format";
-import { getRankInfo } from "@/lib/rank";
+import type { RankInfo } from "@/lib/rank";
 import RankBadge from "@/components/rank/RankBadge";
 import { RANKING_TOP_COUNT, type RankingEntry } from "@/types/ranking";
 
@@ -123,7 +123,7 @@ function PodiumCard({ entry }: { entry: RankingEntry }) {
           <RankName rank={entry.rank} />
         </div>
 
-        <XpMeter xp={entry.experiencePoints} compact className="mt-2.5" />
+        <XpMeter info={entry.progress} compact className="mt-2.5" />
       </div>
     </li>
   );
@@ -160,7 +160,7 @@ function StandingRow({ entry }: { entry: RankingEntry }) {
               <RankBadge rank={entry.rank} size="md" decorative />
             </div>
           </div>
-          <XpMeter xp={entry.experiencePoints} className="mt-2" />
+          <XpMeter info={entry.progress} className="mt-2" />
         </div>
       </div>
     </li>
@@ -198,15 +198,15 @@ function RankName({ rank }: { rank: RankingEntry["rank"] }) {
  * it is hidden from assistive tech rather than announced as a second reading.
  */
 function XpMeter({
-  xp,
+  info,
   compact = false,
   className = "",
 }: {
-  xp: number;
+  /** Computed by getTopRanking against the configured ladder. */
+  info: RankInfo;
   compact?: boolean;
   className?: string;
 }) {
-  const info = getRankInfo(xp);
   const pct = info.progressPercent;
 
   return (

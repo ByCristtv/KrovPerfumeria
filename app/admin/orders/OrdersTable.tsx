@@ -121,7 +121,7 @@ export function PaymentBadge({ status }: { status: string }) {
   );
 }
 
-function formatDate(iso: string): string {
+export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("es-CR", {
     year: "numeric",
     month: "short",

@@ -13,14 +13,22 @@ import {
 } from "@/lib/cr-geo/selection";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { useRegisteredEmailMatch } from "@/hooks/useRegisteredEmailMatch";
+import { useCustomerCoupons } from "@/hooks/useCustomerCoupons";
 import { normalizeOptionalEmail } from "@/schemas/adminOrder";
 import {
   applyCustomerToForm,
   type AutofillMode,
 } from "@/lib/orders/customerAutofill";
+import { quoteAdminShipping } from "@/lib/orders/adminShipping";
+import { evaluateCoupon, groupCoupons } from "@/lib/coupons/discount";
+import { LOCAL_DELIVERY_AREA } from "@/lib/shipping/localDelivery";
 import AdminContainer from "@/components/admin/ui/AdminContainer";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
 import AdminAddressFields from "./AdminAddressFields";
+import AdminCouponPicker, {
+  evaluationLabel,
+  type AdminCouponPickerStatus,
+} from "./AdminCouponPicker";
 import Field from "./Field";
 import CustomerCombobox from "./CustomerCombobox";
 import EmailAccountHint from "./EmailAccountHint";
@@ -91,8 +99,18 @@ export default function AdminOrderCreateView() {
   // ── Money ──
   const [discount, setDiscount] = useState("");
   const [notes, setNotes] = useState("");
+  // The zone rate from calculate_shipping_cost. Kept even for Cariari (where
+  // the order ships free), so moving the district restores it instantly.
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [shippingLoading, setShippingLoading] = useState(false);
+
+  // ── Coupon ──
+  // Remembered together with the account it belongs to. A selection made for
+  // one customer can then never price another customer's order, whatever path
+  // changes the link: the derivation below simply stops seeing it.
+  const [couponPick, setCouponPick] = useState<{ userId: string; couponId: string } | null>(
+    null
+  );
 
   const { data: variants = [], isLoading: variantsLoading } = useAdminProducts();
 
@@ -100,13 +118,53 @@ export default function AdminOrderCreateView() {
   const emailMatch = useRegisteredEmailMatch(email);
   const declined = declinedFor !== null && declinedFor === emailKey;
 
+  const linkedUserId = linked?.user_id ?? null;
+  const couponsQuery = useCustomerCoupons(linkedUserId);
+
   // ── Derived totals ──
   const subtotal = useMemo(
     () => lines.reduce((sum, l) => sum + effectivePrice(l.variant) * l.quantity, 0),
     [lines]
   );
-  const discountValue = Math.max(0, Number(discount) || 0);
-  const total = Math.max(0, subtotal + (shippingCost ?? 0) - discountValue);
+
+  const spendableCoupons = useMemo(
+    () => groupCoupons(couponsQuery.data ?? []).available,
+    [couponsQuery.data]
+  );
+  const selectedCoupon =
+    couponPick && couponPick.userId === linkedUserId
+      ? (spendableCoupons.find((c) => c.id === couponPick.couponId) ?? null)
+      : null;
+  // Picked for THIS customer, but a refetch no longer lists it as spendable
+  // (spent on the website meanwhile, or expired): say so instead of letting
+  // the discount line silently disappear.
+  const couponVanished =
+    couponPick !== null &&
+    couponPick.userId === linkedUserId &&
+    couponsQuery.isSuccess &&
+    selectedCoupon === null;
+  const couponEvaluation = selectedCoupon ? evaluateCoupon(selectedCoupon, subtotal) : null;
+  const couponStatus: AdminCouponPickerStatus = !linkedUserId
+    ? "no-customer"
+    : couponsQuery.isPending
+      ? "loading"
+      : couponsQuery.isError
+        ? "error"
+        : "ready";
+
+  // Same rule the server applies (lib/orders/adminShipping): Limón › Pococí ›
+  // Cariari ships free; pickup is free; anything else pays the zone rate.
+  const shippingQuote = quoteAdminShipping(
+    method,
+    { canton_code: address.cantonCode, district: address.district },
+    shippingCost
+  );
+
+  // A coupon REPLACES the manual discount (one `discount` column per order).
+  const manualDiscount = Math.max(0, Number(discount) || 0);
+  const couponDiscount = couponEvaluation?.ok ? couponEvaluation.discount : 0;
+  const discountValue = selectedCoupon ? couponDiscount : manualDiscount;
+  const total = Math.max(0, subtotal + (shippingQuote.cost ?? 0) - discountValue);
 
   // ── Search results (exclude already-added) ──
   const results = useMemo(() => {
@@ -173,8 +231,17 @@ export default function AdminOrderCreateView() {
     setAddress(next.address);
     setExactAddress(next.exactAddress);
     setReference(next.reference);
+    if (customer.user_id !== linked?.user_id) {
+      // A different account: the previous customer's coupon goes with them.
+      setCouponPick(null);
+    }
     setLinked(customer);
     setDeclinedFor(null);
+  };
+
+  const unlinkCustomer = () => {
+    setLinked(null);
+    setCouponPick(null);
   };
 
   const onEmailChange = (value: string) => {
@@ -183,8 +250,16 @@ export default function AdminOrderCreateView() {
     // admin is no longer talking about that account — keeping the link would
     // credit XP to someone the order's email no longer points at.
     if (linked && (normalizeOptionalEmail(value) ?? "") !== linked.email.toLowerCase()) {
-      setLinked(null);
+      unlinkCustomer();
     }
+  };
+
+  const selectCoupon = (couponId: string) => {
+    if (!linkedUserId) return;
+    setCouponPick({ userId: linkedUserId, couponId });
+    // The coupon takes the discount slot; a stale manual amount would only
+    // be confusing once the field is disabled.
+    setDiscount("");
   };
 
   // ── Item ops ──
@@ -219,7 +294,13 @@ export default function AdminOrderCreateView() {
       return warn("El distrito no pertenece al cantón seleccionado.");
     if (exactAddress.trim().length < 5) return warn("Ingresa las señas de entrega.");
     if (lines.length === 0) return warn("Agrega al menos un producto.");
-    if (discountValue > subtotal + (shippingCost ?? 0))
+    // Never create an order WITHOUT a discount the summary was showing: a
+    // coupon that stopped qualifying (an item was removed) must be resolved.
+    if (couponEvaluation && !couponEvaluation.ok)
+      return warn(
+        `El cupón seleccionado no aplica: ${evaluationLabel(couponEvaluation, subtotal)} Quítalo o ajusta el pedido.`
+      );
+    if (!selectedCoupon && discountValue > subtotal + (shippingQuote.cost ?? 0))
       return warn("El descuento no puede superar el total.");
 
     const input: AdminOrderInput = {
@@ -245,22 +326,28 @@ export default function AdminOrderCreateView() {
         quantity: l.quantity,
       })),
       shipping_method: method,
-      discount: discountValue || undefined,
+      // Exactly one of the two reductions travels; the server rejects both.
+      discount: selectedCoupon ? undefined : manualDiscount || undefined,
+      user_coupon_id: selectedCoupon?.id,
       notes: notes.trim() || undefined,
     };
 
     startSubmit(async () => {
       const result = await createAdminOrderAction(input);
       if (result.ok && result.data) {
+        void couponsQuery.refetch();
         await Swal.fire({
-          icon: "success",
           title: "Pedido creado",
           text: `#${result.data.order_number} · ${result.message}`,
-          timer: 2400,
-          showConfirmButton: false,
+          // A drift warning must be read, not flashed.
+          ...(result.data.needs_review
+            ? { icon: "warning" as const, showConfirmButton: true }
+            : { icon: "success" as const, timer: 2600, showConfirmButton: false }),
         });
         router.push(`/admin/orders/${result.data.order_id}`);
       } else {
+        // The coupon may have been spent elsewhere meanwhile — show the truth.
+        if (selectedCoupon) void couponsQuery.refetch();
         Swal.fire({ icon: "error", title: "No se pudo crear", text: result.message });
       }
     });
@@ -299,8 +386,8 @@ export default function AdminOrderCreateView() {
                   disabled={submitting}
                 />
                 <p className="mt-1 text-[11px] text-krov-ash">
-                  Opcional. Si el cliente tiene cuenta, el pedido se vincula a ella y
-                  suma XP al recibirse.
+                  Opcional. Si el cliente tiene cuenta, el pedido se vincula a ella,
+                  suma XP al recibirse y puedes aplicar sus cupones.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -333,7 +420,7 @@ export default function AdminOrderCreateView() {
                   isError={emailMatch.isError}
                   onLink={(c) => applyCustomer(c, "fill-blanks")}
                   onUnlink={() => {
-                    setLinked(null);
+                    unlinkCustomer();
                     setDeclinedFor(emailKey || null);
                   }}
                   onDecline={() => setDeclinedFor(emailKey)}
@@ -465,6 +552,26 @@ export default function AdminOrderCreateView() {
               </div>
             </Panel>
 
+            {/* Coupon */}
+            <Panel
+              title={
+                linked
+                  ? `Cupones de ${linked.full_name?.trim() || linked.email}`
+                  : "Cupones del cliente"
+              }
+            >
+              <AdminCouponPicker
+                status={couponStatus}
+                coupons={spendableCoupons}
+                subtotal={subtotal}
+                selectedId={selectedCoupon?.id ?? null}
+                onSelect={selectCoupon}
+                onClear={() => setCouponPick(null)}
+                onRetry={() => void couponsQuery.refetch()}
+                disabled={submitting}
+              />
+            </Panel>
+
             {/* Notes */}
             <Panel title="Notas internas (opcional)">
               <textarea
@@ -496,27 +603,69 @@ export default function AdminOrderCreateView() {
                 <Line
                   label="Envío"
                   value={
-                    method === "pickup"
+                    shippingQuote.status === "pickup" || shippingQuote.status === "local_delivery"
                       ? "Gratis"
                       : shippingLoading
                       ? "Calculando…"
-                      : shippingCost == null
+                      : shippingQuote.cost == null
                       ? "—"
-                      : shippingCost === 0
+                      : shippingQuote.cost === 0
                       ? "Gratis"
-                      : formatPrice(shippingCost)
+                      : formatPrice(shippingQuote.cost)
                   }
                 />
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-krov-ash">Descuento</dt>
-                  <input
-                    className="adm-input w-28 text-right py-1.5"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value.replace(/[^0-9]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="0"
-                  />
-                </div>
+                {shippingQuote.status === "local_delivery" && (
+                  <p
+                    className="-mt-1 text-right text-[11px] text-emerald-300"
+                    aria-live="polite"
+                  >
+                    Envío gratis · entrega local {LOCAL_DELIVERY_AREA.districtName},{" "}
+                    {LOCAL_DELIVERY_AREA.cantonName}
+                  </p>
+                )}
+                {couponVanished && (
+                  <p role="alert" className="text-[11px] text-amber-300">
+                    El cupón elegido ya no está disponible para este cliente (pudo usarse en
+                    otro pedido o vencer). Elige otro o continúa sin cupón.
+                  </p>
+                )}
+                {selectedCoupon ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="min-w-0 text-krov-ash">
+                      Cupón{" "}
+                      <span className="font-mono text-[11px] text-krov-bone">
+                        {selectedCoupon.coupon.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCouponPick(null)}
+                        disabled={submitting}
+                        className="ml-2 text-[11px] text-krov-rose underline underline-offset-4 hover:text-krov-blush disabled:opacity-50"
+                      >
+                        Quitar
+                      </button>
+                    </dt>
+                    <dd
+                      className={`shrink-0 tabular-nums ${
+                        couponEvaluation?.ok ? "text-krov-bone" : "text-amber-300"
+                      }`}
+                    >
+                      {couponEvaluation?.ok ? `−${formatPrice(couponDiscount)}` : "No aplica"}
+                    </dd>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-krov-ash">Descuento</dt>
+                    <input
+                      className="adm-input w-28 text-right py-1.5"
+                      value={discount}
+                      onChange={(e) => setDiscount(e.target.value.replace(/[^0-9]/g, ""))}
+                      inputMode="numeric"
+                      placeholder="0"
+                      aria-label="Descuento manual"
+                    />
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-krov-smoke pt-3 text-base font-semibold">
                   <dt className="text-krov-bone">Total</dt>
                   <dd className="tabular-nums text-krov-rose">{formatPrice(total)}</dd>

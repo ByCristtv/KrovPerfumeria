@@ -7,8 +7,11 @@ import type { AdminOrderInput, AdminOrderResult } from "@/types/adminOrder";
 import { notifyOrderPaid } from "@/lib/notifications/orderNotifier";
 import {
   createAdminOrder,
+  type AdminOrderDrift,
   type CustomerNotification,
 } from "@/lib/orders/adminOrderService";
+import { adminCouponErrorMessage } from "@/lib/coupons/adminErrors";
+import { formatPrice } from "@/lib/format";
 
 /**
  * Server actions for admin order management UI (Phase 7).
@@ -185,7 +188,7 @@ export async function markOrderPaidAction(
 
 export async function createAdminOrderAction(
   input: AdminOrderInput
-): Promise<ActionResult<AdminOrderResult>> {
+): Promise<ActionResult<AdminOrderResult & { needs_review: boolean }>> {
   const supabase = await createClient();
   const outcome = await createAdminOrder({ supabase }, input);
 
@@ -202,9 +205,35 @@ export async function createAdminOrderAction(
     message:
       "Pedido creado. Pendiente de pago." +
       (outcome.data.user_id ? " Vinculado a la cuenta del cliente." : "") +
+      couponNote(outcome.data) +
+      (outcome.data.local_delivery ? " Envío gratis por entrega local en Cariari." : "") +
+      driftNote(outcome.drift) +
       confirmationNote(outcome.notification),
-    data: outcome.data,
+    data: {
+      ...outcome.data,
+      needs_review: outcome.drift.couponIgnored || outcome.drift.localDeliveryIgnored,
+    },
   };
+}
+
+function couponNote(data: AdminOrderResult): string {
+  if (!data.user_coupon_id) return "";
+  const label = data.coupon_code ?? data.coupon_name ?? "del cliente";
+  return ` Cupón ${label} aplicado (−${formatPrice(Number(data.discount))}).`;
+}
+
+/**
+ * Loud on purpose: only reachable when the database is older than the code
+ * (migration 20261110000100 not applied), and the order was created WITHOUT
+ * what the admin saw in the summary.
+ */
+function driftNote(drift: AdminOrderDrift): string {
+  const missing = [
+    drift.couponIgnored && "el cupón",
+    drift.localDeliveryIgnored && "el envío gratis de Cariari",
+  ].filter(Boolean);
+  if (missing.length === 0) return "";
+  return ` ATENCIÓN: ${missing.join(" y ")} NO se aplicó (falta la migración 20261110000100 en la base de datos). Revisa el total del pedido.`;
 }
 
 /**
@@ -263,6 +292,12 @@ function rpcError<TData>(
       ok: false,
       message: "No tienes permiso para realizar esta acción.",
     };
+  }
+  // Coupon codes first: they are exact tokens, and the generic patterns below
+  // ("stock", "does not exist") must never claim them.
+  const couponMessage = adminCouponErrorMessage(msg);
+  if (couponMessage) {
+    return { ok: false, message: couponMessage };
   }
   if (/does not exist/i.test(msg)) {
     return { ok: false, message: "El pedido no existe." };

@@ -175,11 +175,7 @@ export default function PurchasePanel({
           // is simply absent - there is no fallback path into add-to-cart.
           <div className="flex basis-full flex-col gap-2.5 md:basis-auto md:gap-3">
             <MadeToOrderNotice />
-            {inquiryUrl && (
-              <>
-                <InquiryButton href={inquiryUrl} />             
-              </>
-            )}
+            {inquiryUrl && <InquiryButton href={inquiryUrl} />}
           </div>
         ) : (
           <div className="grid min-w-[10.5rem] flex-1 md:min-w-0 md:flex-none">
@@ -205,9 +201,10 @@ export default function PurchasePanel({
 }
 
 /**
- * Sets the expectation BEFORE the customer taps: this is a request, not a
- * purchase. Availability comes from the supplier and can change, so it is
- * confirmed (with a delivery estimate) over WhatsApp before the sale is final.
+ * Sets the expectation BEFORE the customer taps: a made-to-order bottle comes
+ * from the supplier, so the panel states the delivery estimate. The state itself
+ * is labelled once, by the "Por encargo" badge beside the price; the WhatsApp
+ * button below is the only action (no cart, no order).
  */
 function MadeToOrderNotice() {
   return (
@@ -216,7 +213,7 @@ function MadeToOrderNotice() {
         Entrega
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-krov-ash md:mt-2 md:text-[13px]">
-        Tiempo estimado de entrega: 1 a 3 dias
+        Tiempo estimado de entrega: 1 a 3 días
       </p>
     </div>
   );

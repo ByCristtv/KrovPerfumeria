@@ -5,6 +5,8 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/footer/Footer";
 import FooterGate from "@/components/layout/footer/FooterGate";
 import QueryProvider from "@/components/providers/QueryProvider";
+import RankLadderProvider from "@/components/rank/RankLadderProvider";
+import { getRankLadderSafe } from "@/features/loyalty/rankLadder";
 import AuthListener from "@/components/auth/AuthListener";
 import JsonLd from "@/components/seo/JsonLd";
 import { organizationSchema, webSiteSchema } from "@/lib/seo/jsonLd";
@@ -117,11 +119,16 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false, address: false },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The rank ladder (public.levels) for every client component that turns XP
+  // into a rank. Anon read, memoised per render; null if unavailable, in which
+  // case rank UI degrades instead of the whole site failing.
+  const rankLadder = await getRankLadderSafe();
+
   return (
     // lang is es-CR: regional targeting matters for a CR-only storefront.
     <html
@@ -155,14 +162,16 @@ export default function RootLayout({
         <JsonLd data={[organizationSchema(), webSiteSchema()]} />
 
         <QueryProvider>
-          <AuthListener />
-          <Navbar />
-          <main id="contenido" className="flex-1">
-            {children}
-          </main>
-          <FooterGate>
-            <Footer />
-          </FooterGate>
+          <RankLadderProvider ladder={rankLadder}>
+            <AuthListener />
+            <Navbar />
+            <main id="contenido" className="flex-1">
+              {children}
+            </main>
+            <FooterGate>
+              <Footer />
+            </FooterGate>
+          </RankLadderProvider>
         </QueryProvider>
         <Analytics />
       </body>

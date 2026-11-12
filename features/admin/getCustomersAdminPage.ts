@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { paginate, type Paginated } from "@/lib/pagination";
 import { getRankFromXP, type UserRank } from "@/lib/rank";
+import { getRankLadderSafe } from "@/features/loyalty/rankLadder";
 import type { Database } from "@/types/database";
 
 /** Customers per page in Admin → Clientes (other admin lists use 20). */
@@ -19,8 +20,8 @@ export type AdminCustomerRow = Pick<
   | "experience_points"
   | "created_at"
 > & {
-  /** Derived from `experience_points` via lib/rank.ts — never stored. */
-  rank: UserRank;
+  /** Derived from `experience_points` and the configured ladder — never stored. Null if the ladder is unavailable. */
+  rank: UserRank | null;
 };
 
 export interface CustomersAdminPage extends Paginated<AdminCustomerRow> {
@@ -70,10 +71,13 @@ export async function getCustomersAdminPage(
     query = query.or(`full_name.ilike.*${safe}*,username.ilike.*${safe}*`);
   }
 
-  const { data, error, count } = await query
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: true })
-    .range(offset, offset + pageSize - 1);
+  const [{ data, error, count }, ladder] = await Promise.all([
+    query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1),
+    getRankLadderSafe(),
+  ]);
 
   if (error) {
     const outOfRange = error.code === RANGE_NOT_SATISFIABLE;
@@ -95,7 +99,7 @@ export async function getCustomersAdminPage(
   return {
     rows: (data ?? []).map((row) => ({
       ...(row as Omit<AdminCustomerRow, "rank">),
-      rank: getRankFromXP(row.experience_points),
+      rank: ladder ? getRankFromXP(row.experience_points, ladder) : null,
     })),
     total,
     currentPage,

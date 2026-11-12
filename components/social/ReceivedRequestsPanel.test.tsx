@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReceivedFriendRequest } from "@/types/social";
 
@@ -34,6 +34,7 @@ vi.mock("next/image", () => ({
 }));
 
 import ReceivedRequestsPanel from "./ReceivedRequestsPanel";
+import { renderWithLadder } from "@/test/helpers/rankLadder";
 
 const request = (
   over: Partial<ReceivedFriendRequest> = {}
@@ -74,7 +75,7 @@ function setup(
     isPending: !!flight.rejecting,
     variables: flight.rejecting,
   });
-  return render(<ReceivedRequestsPanel onGoToSearch={onGoToSearch} />);
+  return renderWithLadder(<ReceivedRequestsPanel onGoToSearch={onGoToSearch} />);
 }
 
 /** SOCIAL-06 + SOCIAL-07. */

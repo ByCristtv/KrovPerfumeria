@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import RankingBoard from "./RankingBoard";
-import { getRankFromXP } from "@/lib/rank";
+import { getRankInfo } from "@/lib/rank";
+import { TEST_LADDER, ladderWith } from "@/test/helpers/rankLadder";
 import type { RankingEntry } from "@/types/ranking";
 
 const entry = (
   position: number,
   username: string,
   experiencePoints: number,
-  movement?: number | null
-): RankingEntry => ({
-  position,
-  username,
-  experiencePoints,
-  rank: getRankFromXP(experiencePoints),
-  movement,
-});
+  movement?: number | null,
+  ladder = TEST_LADDER
+): RankingEntry => {
+  // What getTopRanking computes server-side from the configured ladder.
+  const progress = getRankInfo(experiencePoints, ladder);
+  return { position, username, experiencePoints, rank: progress.currentRank, progress, movement };
+};
 
 const full = [
   entry(1, "aurora", 21_400),
@@ -73,5 +73,13 @@ describe("RankingBoard", () => {
       render(<RankingBoard entries={[entry(1, "a", 100), entry(2, "b", 90, null)]} />);
       expect(screen.queryByText(/Subió|Bajó|Sin cambios/)).toBeNull();
     });
+  });
+
+  it("measures progress against the ladder it was given (admin-changed thresholds)", () => {
+    const ladder = ladderWith([0, 1_000, 5_000, 10_000, 25_000]);
+    render(<RankingBoard entries={[entry(1, "aurora", 21_400, undefined, ladder)]} />);
+    // 21,400 is no longer Maestro: the meter targets the moved 25,000 threshold.
+    expect(screen.getByText(/\/ 25,000/)).toBeInTheDocument();
+    expect(screen.queryByText("Rango máximo")).not.toBeInTheDocument();
   });
 });

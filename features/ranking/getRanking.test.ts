@@ -3,8 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { rpcMock } = vi.hoisted(() => ({ rpcMock: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ supabase: { rpc: rpcMock } }));
 
+const { ladderMock } = vi.hoisted(() => ({ ladderMock: vi.fn() }));
+vi.mock("@/features/loyalty/rankLadder", () => ({ getRankLadderSafe: ladderMock }));
+
 import { getTopRanking } from "./getRanking";
 import { RANKING_TOP_COUNT } from "@/types/ranking";
+import { TEST_LADDER, ladderWith } from "@/test/helpers/rankLadder";
+import { getRankInfo } from "@/lib/rank";
 
 type Row = {
   rank_position: number;
@@ -21,7 +26,10 @@ function rows(...values: Array<[number, string, number]>): Row[] {
 }
 
 describe("getTopRanking", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ladderMock.mockResolvedValue(TEST_LADDER);
+  });
 
   it("asks the database for the top 10 by default", () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
@@ -31,9 +39,9 @@ describe("getTopRanking", () => {
     });
   });
 
-  it("derives each entry's rank from the shared XP thresholds", async () => {
-    // One entry per tier, so a change to RANK_THRESHOLDS surfaces here rather
-    // than silently relabelling the leaderboard.
+  it("derives each entry's rank from the configured XP thresholds", async () => {
+    // One entry per tier of the seeded ladder (public.levels), so a change to
+    // the mapping surfaces here rather than silently relabelling the board.
     rpcMock.mockResolvedValue({
       data: rows(
         [1, "parfum_user", 18_000],
@@ -86,7 +94,7 @@ describe("getTopRanking", () => {
     ]);
   });
 
-  it("exposes only position, username, XP and rank", async () => {
+  it("exposes only position, username, XP, rank and progress", async () => {
     rpcMock.mockResolvedValue({
       data: rows([1, "aurora", 2_400]),
       error: null,
@@ -99,6 +107,7 @@ describe("getTopRanking", () => {
       username: "aurora",
       experiencePoints: 2_400,
       rank: "Coleccionista",
+      progress: getRankInfo(2_400, TEST_LADDER),
     });
   });
 
@@ -133,5 +142,18 @@ describe("getTopRanking", () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
     void getTopRanking(3);
     expect(rpcMock).toHaveBeenCalledWith("get_ranking_top", { p_limit: 3 });
+  });
+
+  it("relabels the board when an admin moves a threshold (no code change)", async () => {
+    ladderMock.mockResolvedValue(ladderWith([0, 1_000, 2_000, 10_000, 18_000]));
+    rpcMock.mockResolvedValue({ data: rows([1, "a", 2_400]), error: null });
+    const result = await getTopRanking();
+    expect(result.status === "ok" && result.entries[0].rank).toBe("Conocedor");
+  });
+
+  it("shows the error state rather than guessing ranks when the ladder is unavailable", async () => {
+    ladderMock.mockResolvedValue(null);
+    rpcMock.mockResolvedValue({ data: rows([1, "a", 2_400]), error: null });
+    expect(await getTopRanking()).toEqual({ status: "error" });
   });
 });

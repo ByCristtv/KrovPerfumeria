@@ -5,13 +5,15 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateXpAdjustment, type XpAdjustmentInput } from "@/lib/customers/xpAdjustment";
 import { getRankFromXP, type UserRank } from "@/lib/rank";
+import { getRankLadderSafe } from "@/features/loyalty/rankLadder";
 import type { ActionResult } from "@/types/action";
 
 export interface XpAdjustmentResult {
   delta: number;
   balance_before: number;
   balance_after: number;
-  rank: UserRank;
+  /** Null only if the ladder could not be read; the XP change still landed. */
+  rank: UserRank | null;
 }
 
 /**
@@ -75,6 +77,7 @@ export async function adjustCustomerXpAction(
 
   const result = data as unknown as Omit<XpAdjustmentResult, "rank"> | null;
   const balanceAfter = result?.balance_after ?? 0;
+  const ladder = await getRankLadderSafe();
 
   revalidatePath("/admin/clientes");
   revalidatePath(`/admin/clientes/${userId}`);
@@ -89,7 +92,7 @@ export async function adjustCustomerXpAction(
       delta: result?.delta ?? validation.delta,
       balance_before: result?.balance_before ?? balanceAfter - validation.delta,
       balance_after: balanceAfter,
-      rank: getRankFromXP(balanceAfter),
+      rank: ladder ? getRankFromXP(balanceAfter, ladder) : null,
     },
   };
 }

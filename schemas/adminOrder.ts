@@ -173,22 +173,38 @@ const itemSchema = z.object({
     .max(99, { message: "La cantidad excede el máximo permitido." }),
 });
 
-export const adminOrderInputSchema = z.object({
-  customer: customerSchema,
-  shipping: shippingShape.superRefine(requireCoherentGeography),
-  items: z
-    .array(itemSchema)
-    .min(1, { message: "Agrega al menos un producto al pedido." })
-    .max(100, { message: "Demasiados artículos en el pedido." }),
-  shipping_method: z.enum(["delivery", "pickup"], {
-    message: "Selecciona un método de envío válido.",
-  }),
-  discount: z
-    .number()
-    .nonnegative({ message: "El descuento no puede ser negativo." })
-    .optional(),
-  notes: optionalText(500, "Las notas son demasiado largas."),
-});
+export const adminOrderInputSchema = z
+  .object({
+    customer: customerSchema,
+    shipping: shippingShape.superRefine(requireCoherentGeography),
+    items: z
+      .array(itemSchema)
+      .min(1, { message: "Agrega al menos un producto al pedido." })
+      .max(100, { message: "Demasiados artículos en el pedido." }),
+    shipping_method: z.enum(["delivery", "pickup"], {
+      message: "Selecciona un método de envío válido.",
+    }),
+    discount: z
+      .number()
+      .nonnegative({ message: "El descuento no puede ser negativo." })
+      .optional(),
+    /** A user_coupons id; the RPC decides whether it may be spent. */
+    user_coupon_id: z
+      .string()
+      .uuid({ message: "El cupón seleccionado no es válido." })
+      .optional(),
+    notes: optionalText(500, "Las notas son demasiado largas."),
+  })
+  // Same two rules the RPC enforces (coupon_customer_required /
+  // coupon_manual_discount_conflict), surfaced as form copy instead of SQL.
+  .refine((o) => !o.user_coupon_id || Boolean(o.customer.user_id), {
+    message: "Para aplicar un cupón, selecciona la cuenta registrada del cliente.",
+    path: ["user_coupon_id"],
+  })
+  .refine((o) => !o.user_coupon_id || !o.discount, {
+    message: "Un cupón no se combina con un descuento manual. Usa solo uno.",
+    path: ["discount"],
+  });
 
 /**
  * The payload after normalisation — this, not the raw client input, is what the

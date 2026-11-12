@@ -10,6 +10,7 @@ import {
 } from "@/lib/customers/xpAdjustment";
 import { formatXp } from "@/lib/format";
 import { getRankFromXP } from "@/lib/rank";
+import { useRankLadder } from "@/components/rank/RankLadderProvider";
 
 interface Props {
   userId: string;
@@ -30,6 +31,7 @@ export default function XpAdjustmentForm({ userId, currentXp }: Props) {
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isPending, startTransition] = useTransition();
+  const ladder = useRankLadder();
 
   const preview = amount.trim()
     ? validateXpAdjustment({ direction, amount, reason }, currentXp)
@@ -51,7 +53,9 @@ export default function XpAdjustmentForm({ userId, currentXp }: Props) {
         setAmount("");
         setReason("");
         const after = result.data
-          ? ` Nuevo saldo: ${formatXp(result.data.balance_after)} XP (${result.data.rank}).`
+          ? ` Nuevo saldo: ${formatXp(result.data.balance_after)} XP${
+              result.data.rank ? ` (${result.data.rank})` : ""
+            }.`
           : "";
         setFeedback({ kind: "success", message: `${result.message}${after}` });
       } else {
@@ -121,7 +125,7 @@ export default function XpAdjustmentForm({ userId, currentXp }: Props) {
         />
         <p className="mt-1.5 text-xs text-krov-ash" aria-live="polite">
           {nextXp !== null
-            ? `Nuevo saldo: ${formatXp(nextXp)} XP · ${getRankFromXP(nextXp)}`
+            ? `Nuevo saldo: ${formatXp(nextXp)} XP${ladder ? ` · ${getRankFromXP(nextXp, ladder)}` : ""}`
             : preview && !preview.ok
               ? preview.message
               : `Saldo actual: ${formatXp(currentXp)} XP`}

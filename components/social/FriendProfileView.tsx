@@ -15,6 +15,7 @@ import { useAuthUser } from "@/hooks/useAuthUser";
 import { useFriendProfile, useFriendPurchases } from "@/hooks/useFriendProfile";
 import { getRankFromXP } from "@/lib/rank";
 import RankBadge from "@/components/rank/RankBadge";
+import { useRankLadder } from "@/components/rank/RankLadderProvider";
 import { socialDisplayName } from "@/lib/social/display";
 import { formatXp } from "@/lib/format";
 
@@ -145,9 +146,10 @@ function ProfileHeader({
   avatarUrl: string | null;
   experiencePoints: number;
 }) {
-  // One ladder, shared with /ranking and /profile. Nothing about rank is stored
-  // or recomputed here.
-  const rank = getRankFromXP(experiencePoints);
+  // One ladder (public.levels), shared with /ranking and /profile. Nothing
+  // about rank is stored here; without the ladder only the XP is shown.
+  const ladder = useRankLadder();
+  const rank = ladder ? getRankFromXP(experiencePoints, ladder) : null;
 
   // A friend who has cleared their username still has a profile to show.
   const heading = socialDisplayName(username, fullName);
@@ -173,11 +175,13 @@ function ProfileHeader({
         )}
 
         <div className="mt-4 flex items-center justify-center gap-3 sm:justify-start">
-          <RankBadge rank={rank} size="lg" decorative eager />
+          {rank && <RankBadge rank={rank} size="lg" decorative eager />}
           <div className="flex flex-col items-start gap-1.5 text-left">
-            <span className="border border-krov-blood/50 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-krov-rose">
-              {rank}
-            </span>
+            {rank && (
+              <span className="border border-krov-blood/50 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-krov-rose">
+                {rank}
+              </span>
+            )}
             <span className="text-xs tabular-nums text-krov-dust">
               {formatXp(experiencePoints)} XP
             </span>

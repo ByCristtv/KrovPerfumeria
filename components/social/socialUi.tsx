@@ -7,6 +7,7 @@ import { getRankFromXP } from "@/lib/rank";
 import { formatXp } from "@/lib/format";
 import { NEUTRAL_RING, RANK_STYLES } from "@/lib/social/rankStyle";
 import RankBadge from "@/components/rank/RankBadge";
+import { useRankLadder } from "@/components/rank/RankLadderProvider";
 
 /**
  * The shared surface of the /friends portal.
@@ -129,7 +130,8 @@ export function SocialRingAvatar({
   xp?: number;
   children: ReactNode;
 }) {
-  const style = xp === undefined ? null : RANK_STYLES[getRankFromXP(xp)];
+  const ladder = useRankLadder();
+  const style = xp === undefined || !ladder ? null : RANK_STYLES[getRankFromXP(xp, ladder)];
 
   return (
     <span
@@ -156,11 +158,20 @@ export function SocialHandle({ children }: { children: ReactNode }) {
 
 /**
  * Rank badge + name + XP as one compact semi-transparent pill. The rank comes from
- * `getRankFromXP`, the same ladder the leaderboard and the profile use — there
- * is no second ladder and nothing stored.
+ * `getRankFromXP` over the configured ladder (public.levels), the same one the
+ * leaderboard and the profile use — there is no second ladder and nothing
+ * stored. Without the ladder the pill shows the XP alone rather than a guess.
  */
 export function SocialRankPill({ xp }: { xp: number }) {
-  const rank = getRankFromXP(xp);
+  const ladder = useRankLadder();
+  if (!ladder) {
+    return (
+      <span className="inline-flex max-w-full items-center rounded-full border border-krov-smoke px-2.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-krov-ash">
+        <span className="tabular-nums">{formatXp(xp)} XP</span>
+      </span>
+    );
+  }
+  const rank = getRankFromXP(xp, ladder);
 
   return (
     <span

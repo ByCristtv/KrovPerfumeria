@@ -113,22 +113,30 @@ describe("PurchasePanel: made to order", () => {
     expect(onAddToCart).not.toHaveBeenCalled();
   });
 
-  it("labels the state and tells the customer availability is confirmed first", () => {
+  it("labels the state exactly once and shows the delivery estimate", () => {
     setup(madeToOrder);
 
-    // The badge, and the notice heading.
-    expect(screen.getAllByText("Por encargo").length).toBeGreaterThanOrEqual(2);
-    expect(
-      screen.getByText(/Antes de finalizar tu compra confirmamos por WhatsApp si sigue disponible y cuál sería el plazo de entrega/)
-    ).toBeInTheDocument();
+    // ONE "Por encargo": the availability badge beside the price. The notice is
+    // headed "Entrega" (it carries the delivery estimate), and the size chip is
+    // NOT suffixed with the state — the label is never repeated.
+    const labels = screen.getAllByText("Por encargo");
+    expect(labels).toHaveLength(1);
+    expect(labels[0].tagName).toBe("SPAN");
+    expect(screen.getByRole("button", { name: /100\s*ml/ })).not.toHaveTextContent(/Por encargo/);
+
+    expect(screen.getByText("Entrega")).toBeInTheDocument();
+    expect(screen.getByText("Tiempo estimado de entrega: 1 a 3 días")).toBeInTheDocument();
   });
 
-  it("does not claim a message was sent", () => {
+  it("says the button opens WhatsApp, and never claims a message was sent", () => {
     setup(madeToOrder);
-    expect(
-      screen.getByText("Se abrirá WhatsApp con el mensaje listo para que lo envíes.")
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/enviado|enviamos tu/i)).not.toBeInTheDocument();
+
+    // The visible label plus the screen-reader suffix: opening WhatsApp in a new
+    // tab is the whole action — nothing is sent on the customer's behalf.
+    expect(inquiry()).toHaveAccessibleName(
+      /^Consultar disponibilidad\s*\(abre WhatsApp en una pestaña nueva\)$/
+    );
+    expect(screen.queryByText(/enviado|enviamos tu|mensaje enviado/i)).not.toBeInTheDocument();
   });
 
   it("has no quantity stepper and no wholesale tier, even for an eligible buyer", () => {
@@ -169,6 +177,19 @@ describe("PurchasePanel: sold out", () => {
     // Even if a caller wrongly passes a link, the panel keys off availability.
     expect(inquiry()).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Agotado" })).toBeDisabled();
+  });
+
+  it("a decant with liquid left in the pool is a normal sale, never made to order", () => {
+    const { onAddToCart } = setup({
+      variant: { product_type: "decant", size_ml: 5, stock: 0, supplier_available: true },
+      poolMl: 40,
+      inquiryUrl: INQUIRY_URL,
+    });
+
+    expect(inquiry()).not.toBeInTheDocument();
+    expect(screen.queryByText("Por encargo")).not.toBeInTheDocument();
+    fireEvent.click(addToCart()!);
+    expect(onAddToCart).toHaveBeenCalledTimes(1);
   });
 
   it("a drained decant flagged supplier_available stays sold out", () => {

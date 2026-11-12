@@ -77,10 +77,14 @@ export default function CustomersTable({ customers, searching = false }: Props) 
                   {formatXp(c.experience_points)}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <RankBadge rank={c.rank} size="xs" decorative />
-                    {c.rank}
-                  </span>
+                  {c.rank ? (
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <RankBadge rank={c.rank} size="xs" decorative />
+                      {c.rank}
+                    </span>
+                  ) : (
+                    <span className="text-krov-dust">—</span>
+                  )}
                 </td>
                 <td className="hidden px-4 py-3 text-xs text-krov-ash md:table-cell">
                   {c.phone || "—"}

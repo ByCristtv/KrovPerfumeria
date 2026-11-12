@@ -7,7 +7,8 @@ import {
   describeConditions,
   effectiveStatus,
 } from "@/lib/coupons/discount";
-import { RANK_THRESHOLDS } from "@/lib/rank";
+import { getTierByLevel, type RankLadder } from "@/lib/rank";
+import { useRankLadder } from "@/components/rank/RankLadderProvider";
 import type { UserCoupon } from "@/lib/coupons/types";
 
 const SERIF = "var(--font-krov-display), 'Cormorant Garamond', Georgia, serif";
@@ -22,9 +23,9 @@ function formatDate(iso: string | null): string | null {
   return iso ? DATE_FMT.format(new Date(iso)) : null;
 }
 
-/** "Maestro" for level 5 — the ladder is the one source for level names. */
-export function levelName(level: number): string {
-  return RANK_THRESHOLDS[level - 1]?.rank ?? `Nivel ${level}`;
+/** "Maestro" for level 5 — the configured ladder is the one source for level names. */
+export function levelName(level: number, ladder: RankLadder | null): string {
+  return (ladder && getTierByLevel(ladder, level)?.rank) || `Nivel ${level}`;
 }
 
 interface CouponCardProps {
@@ -49,6 +50,7 @@ export default function CouponCard({
   claiming = false,
   now,
 }: CouponCardProps) {
+  const ladder = useRankLadder();
   const status = effectiveStatus(coupon, now);
   const spent = status === "used";
   const expired = status === "expired";
@@ -101,7 +103,7 @@ export default function CouponCard({
               {terms.name}
             </h3>
             <p className="mt-0.5 text-xs text-white/40">
-              {describeBenefit(terms)} · Nivel {levelName(terms.levelRequired)}
+              {describeBenefit(terms)} · Nivel {levelName(terms.levelRequired, ladder)}
             </p>
           </div>
           <StatusPill status={status} onHold={onHold} />

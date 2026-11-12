@@ -8,6 +8,18 @@ const { createClientMock, revalidatePathMock } = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({ createClient: createClientMock }));
 vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 
+// The ladder is read from public.levels in production; tests pin the seeded one.
+const { ladderMock } = vi.hoisted(() => ({ ladderMock: { current: null as unknown } }));
+vi.mock("@/features/loyalty/rankLadder", async () => {
+  const { TEST_LADDER } = await import("@/test/helpers/rankLadder");
+  ladderMock.current = TEST_LADDER;
+  return {
+    getRankLadder: vi.fn(async () => ladderMock.current),
+    getRankLadderSafe: vi.fn(async () => ladderMock.current),
+    fetchRankLadder: vi.fn(async () => ladderMock.current),
+  };
+});
+
 import { adjustCustomerXpAction } from "./actions";
 
 const CUSTOMER = "11111111-1111-4111-8111-111111111111";

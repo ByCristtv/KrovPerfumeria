@@ -297,3 +297,148 @@ describe("createAdminOrder — validation and RPC failures", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Free Cariari delivery — decided on the server, from the validated address
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CUSTOMER_ID = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
+const USER_COUPON_ID = "5b6c7d8e-9f01-4a2b-8c3d-4e5f6a7b8c9d";
+
+function cariariInput(overrides: Partial<AdminOrderInput["shipping"]> = {}): AdminOrderInput {
+  const input = makeInput();
+  input.shipping = {
+    address: "Frente al parque, casa verde",
+    canton_code: "702",
+    canton_name: "Pococí",
+    province_name: "Limón",
+    district: "Cariari",
+    ...overrides,
+  };
+  return input;
+}
+
+describe("createAdminOrder — free local delivery (Limón › Pococí › Cariari)", () => {
+  it("tells the RPC to waive shipping for a Cariari delivery", async () => {
+    const { client, rpc } = makeSupabase({
+      data: { ...RPC_RESULT, shipping_cost: 0, local_delivery: true },
+      error: null,
+    });
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), cariariInput());
+
+    const args = rpc.mock.calls[0][1] as { p_payload: any };
+    expect(args.p_payload.shipping.free_local_delivery).toBe(true);
+    expect(outcome.ok && outcome.drift).toEqual({
+      couponIgnored: false,
+      localDeliveryIgnored: false,
+    });
+  });
+
+  it("does not waive shipping for another district of Pococí", async () => {
+    const { client, rpc } = makeSupabase();
+    await createAdminOrder(deps(client, makeNotifier()), cariariInput({ district: "Guápiles" }));
+
+    const args = rpc.mock.calls[0][1] as { p_payload: any };
+    expect(args.p_payload.shipping.free_local_delivery).toBe(false);
+  });
+
+  it("does not waive shipping on a pickup order (already free)", async () => {
+    const { client, rpc } = makeSupabase();
+    const input = cariariInput();
+    input.shipping_method = "pickup";
+    await createAdminOrder(deps(client, makeNotifier()), input);
+
+    const args = rpc.mock.calls[0][1] as { p_payload: any };
+    expect(args.p_payload.shipping.free_local_delivery).toBe(false);
+  });
+
+  it("ignores a free-shipping flag forged by the browser", async () => {
+    const { client, rpc } = makeSupabase();
+    const input = makeInput(); // San José, Carmen
+    (input.shipping as any).free_local_delivery = true;
+
+    await createAdminOrder(deps(client, makeNotifier()), input);
+
+    const args = rpc.mock.calls[0][1] as { p_payload: any };
+    expect(args.p_payload.shipping.free_local_delivery).toBe(false);
+  });
+
+  it("flags drift when an outdated database still charged shipping", async () => {
+    const { client } = makeSupabase({ data: { ...RPC_RESULT, shipping_cost: 2_900 }, error: null });
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), cariariInput());
+
+    expect(outcome.ok && outcome.drift.localDeliveryIgnored).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coupons — forwarded as an intent; spent by the RPC in the same transaction
+// ─────────────────────────────────────────────────────────────────────────────
+
+function couponInput(): AdminOrderInput {
+  const input = makeInput();
+  input.customer.user_id = CUSTOMER_ID;
+  input.user_coupon_id = USER_COUPON_ID;
+  return input;
+}
+
+describe("createAdminOrder — level coupons", () => {
+  it("forwards the coupon id and no manual discount", async () => {
+    const { client, rpc } = makeSupabase({
+      data: { ...RPC_RESULT, user_coupon_id: USER_COUPON_ID, discount: 3_200 },
+      error: null,
+    });
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), couponInput());
+
+    const args = rpc.mock.calls[0][1] as { p_payload: any };
+    expect(args.p_payload.user_coupon_id).toBe(USER_COUPON_ID);
+    expect(args.p_payload.discount).toBeUndefined();
+    expect(outcome.ok && outcome.drift.couponIgnored).toBe(false);
+  });
+
+  it("refuses a coupon without a linked account, before touching the DB", async () => {
+    const { client, rpc } = makeSupabase();
+    const input = couponInput();
+    delete input.customer.user_id;
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), input);
+
+    expect(outcome).toMatchObject({ ok: false, kind: "validation" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a coupon combined with a manual discount, before touching the DB", async () => {
+    const { client, rpc } = makeSupabase();
+    const input = couponInput();
+    input.discount = 1_000;
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), input);
+
+    expect(outcome).toMatchObject({ ok: false, kind: "validation" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a coupon rejection from the RPC as an RPC failure (no order)", async () => {
+    const { client } = makeSupabase({
+      data: null,
+      error: { message: "coupon_not_available", code: "P0001" },
+    });
+    const notify = makeNotifier();
+
+    const outcome = await createAdminOrder(deps(client, notify), couponInput());
+
+    expect(outcome).toMatchObject({ ok: false, kind: "rpc" });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("flags drift when an outdated database ignored the coupon", async () => {
+    const { client } = makeSupabase(); // RPC_RESULT has no user_coupon_id
+
+    const outcome = await createAdminOrder(deps(client, makeNotifier()), couponInput());
+
+    expect(outcome.ok && outcome.drift.couponIgnored).toBe(true);
+  });
+});
