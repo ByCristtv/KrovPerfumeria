@@ -1,23 +1,32 @@
 "use client";
 
 import { useBestSellers, type BestSellerRow } from "@/hooks/useAnalytics";
+import type { ResolvedSalesRange } from "@/lib/analytics/dateRange";
 import { formatPrice } from "@/lib/format";
 
 interface Props {
-  since: Date | null;
+  range: ResolvedSalesRange;
 }
 
 /**
  * Top 10 best-selling variants in the selected period, sorted by units sold
- * (server-side via analytics_best_sellers RPC).
+ * (server-side via analytics_sales_best_sellers, same period as the KPIs).
  *
- * Each row shows: rank, brand + product, type/size, units, revenue.
+ * Each row shows: rank, brand + product, type/size, units, revenue. While a
+ * new period loads, the previous rows stay (no layout jump) but are dimmed and
+ * marked busy so they are not read as the new period.
  */
-export default function BestSellersTable({ since }: Props) {
-  const { data, isLoading, isError, error } = useBestSellers({ since, limit: 10 });
+export default function BestSellersTable({ range }: Props) {
+  const { data, isLoading, isPlaceholderData, isError, error } = useBestSellers({
+    range,
+    limit: 10,
+  });
 
   return (
-    <section className="rounded-none border border-krov-smoke bg-krov-graphite overflow-hidden">
+    <section
+      className="rounded-none border border-krov-smoke bg-krov-graphite overflow-hidden"
+      aria-busy={isLoading || isPlaceholderData}
+    >
       <header className="px-5 py-4 border-b border-krov-smoke/70">
         <h2 className="text-base font-semibold text-krov-bone">
           Más vendidos
@@ -31,10 +40,16 @@ export default function BestSellersTable({ since }: Props) {
         <SkeletonRows />
       ) : isError ? (
         <ErrorRow message={error instanceof Error ? error.message : "Error"} />
-      ) : (data ?? []).length === 0 ? (
-        <EmptyRow message="Sin ventas registradas en este período." />
       ) : (
-        <Table rows={data ?? []} />
+        <div
+          className={isPlaceholderData ? "opacity-40 transition-opacity" : "transition-opacity"}
+        >
+          {(data ?? []).length === 0 ? (
+            <EmptyRow message="Sin ventas registradas en este período." />
+          ) : (
+            <Table rows={data ?? []} />
+          )}
+        </div>
       )}
     </section>
   );

@@ -14,7 +14,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "update-types": "npx supabase gen types typescript --project-id phhrvqqlvgapbiodwpwy > types/database.ts"
+    "update-types": "cmd /c \"npx supabase gen types typescript --remote=phhrvqqlvgapbiodwpwy --schema=public > types/database.ts\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

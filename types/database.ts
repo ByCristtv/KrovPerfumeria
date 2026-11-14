@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.17"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       addresses: {
@@ -227,6 +202,7 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          created_by: string | null
           description: string | null
           discount_type: string
           discount_value: number
@@ -237,11 +213,13 @@ export type Database = {
           min_order_subtotal: number
           name: string
           updated_at: string
+          updated_by: string | null
           valid_days: number | null
         }
         Insert: {
           code: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           discount_type: string
           discount_value: number
@@ -252,11 +230,13 @@ export type Database = {
           min_order_subtotal?: number
           name: string
           updated_at?: string
+          updated_by?: string | null
           valid_days?: number | null
         }
         Update: {
           code?: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           discount_type?: string
           discount_value?: number
@@ -267,15 +247,30 @@ export type Database = {
           min_order_subtotal?: number
           name?: string
           updated_at?: string
+          updated_by?: string | null
           valid_days?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "coupons_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "coupons_level_required_fkey"
             columns: ["level_required"]
             isOneToOne: false
             referencedRelation: "levels"
             referencedColumns: ["level_number"]
+          },
+          {
+            foreignKeyName: "coupons_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -429,6 +424,7 @@ export type Database = {
           name: string
           required_xp: number
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
@@ -436,6 +432,7 @@ export type Database = {
           name: string
           required_xp: number
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
@@ -443,8 +440,110 @@ export type Database = {
           name?: string
           required_xp?: number
           updated_at?: string
+          updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "levels_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          id: number
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: never
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: never
+          target_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_account_links: {
+        Row: {
+          created_at: string
+          id: number
+          linked_by: string | null
+          order_id: string
+          order_status_at_link: string
+          user_id: string
+          xp_awarded: number
+          xp_status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          linked_by?: string | null
+          order_id: string
+          order_status_at_link: string
+          user_id: string
+          xp_awarded?: number
+          xp_status: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          linked_by?: string | null
+          order_id?: string
+          order_status_at_link?: string
+          user_id?: string
+          xp_awarded?: number
+          xp_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_account_links_linked_by_fkey"
+            columns: ["linked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_account_links_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_account_links_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_items: {
         Row: {
@@ -1029,6 +1128,48 @@ export type Database = {
           },
         ]
       }
+      profile_level_unlocks: {
+        Row: {
+          level_number: number
+          required_xp_at_unlock: number
+          source: string
+          unlocked_at: string
+          user_id: string
+          xp_at_unlock: number
+        }
+        Insert: {
+          level_number: number
+          required_xp_at_unlock: number
+          source: string
+          unlocked_at?: string
+          user_id: string
+          xp_at_unlock: number
+        }
+        Update: {
+          level_number?: number
+          required_xp_at_unlock?: number
+          source?: string
+          unlocked_at?: string
+          user_id?: string
+          xp_at_unlock?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_level_unlocks_level_number_fkey"
+            columns: ["level_number"]
+            isOneToOne: false
+            referencedRelation: "levels"
+            referencedColumns: ["level_number"]
+          },
+          {
+            foreignKeyName: "profile_level_unlocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_xp_adjustments: {
         Row: {
           balance_after: number
@@ -1260,10 +1401,19 @@ export type Database = {
       user_coupons: {
         Row: {
           claimed_at: string | null
+          coupon_code: string
+          coupon_description: string | null
           coupon_id: string
+          coupon_name: string
           created_at: string
+          discount_type: string
+          discount_value: number
           expires_at: string | null
           id: string
+          issue_source: string
+          level_required: number
+          max_discount_amount: number | null
+          min_order_subtotal: number
           payment_confirmed_at: string | null
           status: string
           unlocked_at: string
@@ -1274,10 +1424,19 @@ export type Database = {
         }
         Insert: {
           claimed_at?: string | null
+          coupon_code: string
+          coupon_description?: string | null
           coupon_id: string
+          coupon_name: string
           created_at?: string
+          discount_type: string
+          discount_value: number
           expires_at?: string | null
           id?: string
+          issue_source?: string
+          level_required: number
+          max_discount_amount?: number | null
+          min_order_subtotal: number
           payment_confirmed_at?: string | null
           status?: string
           unlocked_at?: string
@@ -1288,10 +1447,19 @@ export type Database = {
         }
         Update: {
           claimed_at?: string | null
+          coupon_code?: string
+          coupon_description?: string | null
           coupon_id?: string
+          coupon_name?: string
           created_at?: string
+          discount_type?: string
+          discount_value?: number
           expires_at?: string | null
           id?: string
+          issue_source?: string
+          level_required?: number
+          max_discount_amount?: number | null
+          min_order_subtotal?: number
           payment_confirmed_at?: string | null
           status?: string
           unlocked_at?: string
@@ -1375,6 +1543,24 @@ export type Database = {
         Args: { p_delta: number; p_reason?: string; p_user_id: string }
         Returns: Json
       }
+      admin_create_coupon_reward: {
+        Args: {
+          p_description: string
+          p_discount_type: string
+          p_discount_value: number
+          p_is_active?: boolean
+          p_level_number: number
+          p_max_discount_amount?: number
+          p_min_order_subtotal: number
+          p_name: string
+          p_valid_days?: number
+        }
+        Returns: Json
+      }
+      admin_delete_coupon_reward: {
+        Args: { p_coupon_id: string }
+        Returns: Json
+      }
       admin_find_customer_by_email: {
         Args: { p_email: string }
         Returns: {
@@ -1388,6 +1574,14 @@ export type Database = {
           phone: string
           user_id: string
         }[]
+      }
+      admin_issue_coupon_reward_retroactively: {
+        Args: { p_coupon_id: string; p_dry_run?: boolean }
+        Returns: Json
+      }
+      admin_link_order_to_customer: {
+        Args: { p_order_id: string; p_user_id: string }
+        Returns: Json
       }
       admin_list_product_variants: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
@@ -1436,6 +1630,32 @@ export type Database = {
           variant_id: string
         }[]
       }
+      admin_list_unlinked_orders: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_order_status?: string
+          p_payment_status?: string
+          p_search?: string
+        }
+        Returns: {
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          discount: number
+          id: string
+          order_number: number
+          order_status: string
+          payment_provider: string
+          payment_status: string
+          shipping_cost: number
+          source: string
+          subtotal: number
+          total: number
+          total_count: number
+        }[]
+      }
       admin_search_customers: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
@@ -1449,6 +1669,27 @@ export type Database = {
           phone: string
           user_id: string
         }[]
+      }
+      admin_set_coupon_reward_active: {
+        Args: { p_coupon_id: string; p_is_active: boolean }
+        Returns: Json
+      }
+      admin_update_coupon_reward: {
+        Args: {
+          p_coupon_id: string
+          p_description: string
+          p_discount_value: number
+          p_expected_updated_at?: string
+          p_max_discount_amount?: number
+          p_min_order_subtotal: number
+          p_name: string
+          p_valid_days?: number
+        }
+        Returns: Json
+      }
+      admin_update_level_thresholds: {
+        Args: { p_expected_updated_at?: string; p_thresholds: Json }
+        Returns: Json
       }
       advance_order_status: {
         Args: { p_new_status: string; p_order_id: string }
@@ -1467,6 +1708,48 @@ export type Database = {
           variant_id: string
         }[]
       }
+      analytics_countable_orders: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          billing_company_name: string | null
+          billing_tax_id: string | null
+          created_at: string
+          created_by_admin_id: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string
+          discount: number
+          id: string
+          is_wholesale_order: boolean
+          notes: string | null
+          order_number: number
+          order_status: Database["public"]["Enums"]["order_status"]
+          paid_at: string | null
+          payment_provider: string | null
+          payment_reference: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"]
+          shipping_address: string
+          shipping_canton: string
+          shipping_cost: number
+          shipping_district: string
+          shipping_method: string | null
+          shipping_province: string
+          shipping_reference: string | null
+          source: string
+          subtotal: number
+          tax: number
+          total: number
+          updated_at: string
+          user_coupon_id: string | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       analytics_low_stock: {
         Args: { p_threshold?: number }
         Returns: {
@@ -1480,6 +1763,28 @@ export type Database = {
       }
       analytics_revenue_summary: {
         Args: { p_since?: string }
+        Returns: {
+          avg_order_value: number
+          gross_revenue: number
+          total_orders: number
+          total_units: number
+        }[]
+      }
+      analytics_sales_best_sellers: {
+        Args: { p_from?: string; p_limit?: number; p_to?: string }
+        Returns: {
+          brand_name: string
+          product_name: string
+          product_type: Database["public"]["Enums"]["product_type"]
+          size_ml: number
+          sku: string
+          total_revenue: number
+          total_units: number
+          variant_id: string
+        }[]
+      }
+      analytics_sales_summary: {
+        Args: { p_from?: string; p_to?: string }
         Returns: {
           avg_order_value: number
           gross_revenue: number
@@ -1688,6 +1993,19 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      loyalty_assert_reward_terms: {
+        Args: {
+          p_description: string
+          p_discount_type: string
+          p_discount_value: number
+          p_max_discount_amount: number
+          p_min_order_subtotal: number
+          p_name: string
+          p_valid_days: number
+        }
+        Returns: undefined
+      }
+      loyalty_reward_json: { Args: { p_coupon_id: string }; Returns: Json }
       mark_order_paid:
         | { Args: { p_order_id: string }; Returns: Json }
         | {
@@ -1699,6 +2017,14 @@ export type Database = {
       reconcile_profile_order_xp: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      redeem_user_coupon_for_order: {
+        Args: {
+          p_order_id: string
+          p_owner_id: string
+          p_user_coupon_id: string
+        }
+        Returns: Json
       }
       register_bulk_stock: { Args: { p_payload: Json }; Returns: Json }
       reject_friend_request: {
@@ -1750,6 +2076,7 @@ export type Database = {
         Returns: boolean
       }
       sweep_abandoned_orders: { Args: never; Returns: number }
+      sync_level_unlocks: { Args: { p_source?: string }; Returns: Json }
       transform_to_decant: {
         Args: {
           p_notes?: string
@@ -1759,6 +2086,10 @@ export type Database = {
         Returns: Json
       }
       unaccent: { Args: { "": string }; Returns: string }
+      unlock_reached_levels: {
+        Args: { p_source: string; p_user_id: string }
+        Returns: number
+      }
     }
     Enums: {
       order_status: "pending" | "received" | "shipped" | "denied"
@@ -1898,9 +2229,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       order_status: ["pending", "received", "shipped", "denied"],

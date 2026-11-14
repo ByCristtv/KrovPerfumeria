@@ -2,18 +2,26 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import {
+  salesRangeKey,
+  toRpcBounds,
+  type ResolvedSalesRange,
+} from "@/lib/analytics/dateRange";
 import type { Database } from "@/types/database";
 
 /**
- * Hooks around the existing analytics_* RPCs (defined in supabase/schema.sql).
+ * Hooks around the admin analytics RPCs.
  *
- * All three return arrays. analytics_revenue_summary always returns a
- * single-row array (or empty if no orders match) — the hook flattens it
- * to a single object | null for cleaner consumer code.
+ * Sales (summary + best sellers) go through analytics_sales_summary /
+ * analytics_sales_best_sellers (migration 20261114000100): admin-only,
+ * aggregated in SQL, bounded by [from, to) where null = unbounded. Both hooks
+ * take the SAME ResolvedSalesRange from lib/analytics/dateRange, so the KPI
+ * cards and the best-sellers table can never show different periods.
  *
- * RLS allows admins to read orders/order_items, so these queries succeed
- * for admin sessions. They'd return 0 rows for non-admins. Routing-level
- * gating (proxy.ts) prevents non-admins from reaching the dashboard.
+ * Why no row-limit concern: each RPC aggregates server-side and returns one
+ * row (summary) or at most `limit` rows (best sellers). PostgREST's max-rows
+ * cap applies to returned rows, never to the rows the SQL aggregates over —
+ * so "Todo" sums the complete history no matter how many orders exist.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,73 +29,75 @@ import type { Database } from "@/types/database";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type RevenueSummary =
-  Database["public"]["Functions"]["analytics_revenue_summary"]["Returns"][number];
+  Database["public"]["Functions"]["analytics_sales_summary"]["Returns"][number];
 
 export type BestSellerRow =
-  Database["public"]["Functions"]["analytics_best_sellers"]["Returns"][number];
+  Database["public"]["Functions"]["analytics_sales_best_sellers"]["Returns"][number];
 
 export type LowStockRow =
   Database["public"]["Functions"]["analytics_low_stock"]["Returns"][number];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// useRevenueSummary
-// ─────────────────────────────────────────────────────────────────────────────
-// `since` is a JS Date (or null for all-time). RPC defaults to now() - 30 days
-// if you pass undefined; we explicitly skip the param for the all-time case.
+type SummaryArgs = Database["public"]["Functions"]["analytics_sales_summary"]["Args"];
+type BestSellersArgs = Database["public"]["Functions"]["analytics_sales_best_sellers"]["Args"];
 
-interface UseRevenueSummaryArgs {
-  since: Date | null;
+/**
+ * The generated Args type marks defaulted params optional (`p_from?: string`),
+ * but we deliberately send explicit nulls: an OMITTED bound falls back to the
+ * SQL default, and a default of "now() - 30 days" is precisely what broke
+ * "Todo" before. The SQL defaults are now NULL too — this is belt and braces.
+ */
+function boundsArgs(range: ResolvedSalesRange): SummaryArgs {
+  return toRpcBounds(range) as SummaryArgs;
 }
 
-async function fetchRevenueSummary(
-  since: Date | null
+// ─────────────────────────────────────────────────────────────────────────────
+// Revenue summary
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function fetchRevenueSummary(
+  range: ResolvedSalesRange
 ): Promise<RevenueSummary | null> {
-  const { data, error } = await supabase.rpc(
-    "analytics_revenue_summary",
-    since ? { p_since: since.toISOString() } : {}
-  );
+  const { data, error } = await supabase.rpc("analytics_sales_summary", boundsArgs(range));
   if (error) throw error;
   return data && data.length > 0 ? data[0] : null;
 }
 
-export function useRevenueSummary({ since }: UseRevenueSummaryArgs) {
+export function useRevenueSummary({ range }: { range: ResolvedSalesRange }) {
   return useQuery({
-    queryKey: ["analytics", "revenue-summary", since?.toISOString() ?? "all"],
-    queryFn: () => fetchRevenueSummary(since),
+    queryKey: ["analytics", "sales-summary", ...salesRangeKey(range)],
+    queryFn: () => fetchRevenueSummary(range),
     staleTime: 60_000,
+    // Keeps the layout steady while a new period loads; consumers MUST check
+    // `isPlaceholderData` so the previous period's numbers are never shown as
+    // if they belonged to the new one.
     placeholderData: (prev) => prev,
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useBestSellers
+// Best sellers
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface UseBestSellersArgs {
-  since: Date | null;
-  limit?: number;
-}
-
-async function fetchBestSellers(
-  since: Date | null,
+export async function fetchBestSellers(
+  range: ResolvedSalesRange,
   limit: number
 ): Promise<BestSellerRow[]> {
-  const args: { p_limit: number; p_since?: string } = { p_limit: limit };
-  if (since) args.p_since = since.toISOString();
-  const { data, error } = await supabase.rpc("analytics_best_sellers", args);
+  const args = { ...boundsArgs(range), p_limit: limit } as BestSellersArgs;
+  const { data, error } = await supabase.rpc("analytics_sales_best_sellers", args);
   if (error) throw error;
   return data ?? [];
 }
 
-export function useBestSellers({ since, limit = 10 }: UseBestSellersArgs) {
+export function useBestSellers({
+  range,
+  limit = 10,
+}: {
+  range: ResolvedSalesRange;
+  limit?: number;
+}) {
   return useQuery({
-    queryKey: [
-      "analytics",
-      "best-sellers",
-      since?.toISOString() ?? "all",
-      limit,
-    ],
-    queryFn: () => fetchBestSellers(since, limit),
+    queryKey: ["analytics", "sales-best-sellers", ...salesRangeKey(range), limit],
+    queryFn: () => fetchBestSellers(range, limit),
     staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
